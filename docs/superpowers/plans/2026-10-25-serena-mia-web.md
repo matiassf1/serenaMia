@@ -105,7 +105,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
   - `formatARS(centavos: number): string`; `parseARSToCentavos(input: string): number | null` (acepta `1.234,50` y `1234.5`).
   - `normalizePhone(raw: string): string | null` → últimos 10 dígitos tras quitar no-dígitos; `null` si hay menos de 10.
   - `ORDER_CODE_ALPHABET: string`; `generateOrderCode(rand?: () => number): string`.
-  - `type OpenStatus = { open: boolean; label: string }`; `getOpenStatus(now: Date, schedule: BusinessHoursRow[], exceptions: HoursExceptionRow[], tz?: string): OpenStatus` con labels `"Abierto ahora · cierra a las 20:00"`, `"Cerrado · abre hoy a las 10:30"`, `"Cerrado · abre mañana a las 10:30"`, `"Cerrado · abre el lunes a las 10:30"`.
+  - `type OpenStatus = { open: boolean; label: string }`; `getOpenStatus(now: Date, schedule: BusinessHours[], exceptions: HoursException[], tz?: string): OpenStatus` con labels `"Abierto ahora · cierra a las 20:00"`, `"Cerrado · abre hoy a las 10:30"`, `"Cerrado · abre mañana a las 10:30"`, `"Cerrado · abre el lunes a las 10:30"`.
   - `buildOrderWhatsAppUrl(shopPhone: string, o: { code: string; customerName: string; items: {name: string; quantity: number; unitPrice: number}[]; total: number; deliveryLabel: string; paymentLabel: string }): string`.
 
 - [ ] **Step 1: Write the failing tests** (nombre y aserciones):
@@ -122,7 +122,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 ### Task 4: Servicios de precio, stock y pedidos
 
 **Files:**
-- Create: `src/lib/pricing.ts`, `src/lib/orders.ts`, `src/lib/rateLimit.ts`
+- Create: `src/lib/pricing.ts`, `src/lib/orders.ts`, `src/lib/audit.ts`, `src/lib/rateLimit.ts`
 - Test: `tests/unit/pricing.test.ts`, `tests/service/orders.test.ts`
 
 **Interfaces:**
@@ -131,6 +131,8 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
   - `unitPriceFor(p: {retailPrice:number; wholesalePrice:number|null; wholesaleMinQty:number|null}, qty: number, wholesaleUnlocked: boolean, mode: 'PUBLIC'|'CODE'): { unitPrice: number; wholesale: boolean }` — mayorista si `wholesalePrice != null && qty >= wholesaleMinQty && (mode==='PUBLIC' || wholesaleUnlocked)`.
   - `type PlaceOrderInput = { items: {productId: string; quantity: number}[]; customerName: string; phone: string; deliveryType: 'PICKUP'|'SHIPPING'; pickupPointId?: string; shippingZoneId?: string; shippingAddress?: string; paymentMethodId: string; wholesaleUnlocked: boolean }`.
   - `placeOrder(input: PlaceOrderInput): Promise<{ id: string; code: string; total: number }>`; lanza `OutOfStockError(productId)`, `InvalidOrderError(reason)`.
+  - `extendExpiry(orderId: string, hours: number): Promise<void>` (mueve `expiresAt` a `now + hours`).
+  - `logAudit(adminEmail: string, action: string, entity: string, entityId: string, before: unknown, after: unknown): Promise<void>` en `src/lib/audit.ts`.
   - `cancelOrder(orderId: string): Promise<void>` (repone stock una vez, escribe `StockLog`), `setOrderStatus(orderId, status)`, `setPaymentStatus(orderId, status)`, `markOrderSeen(orderId)`.
   - `expireStaleOrders(now: Date): Promise<number>` → cancela pedidos `paymentStatus=PENDING` y `status=RECEIVED` con `expiresAt <= now`; devuelve cuántos.
   - `findOrderForTracking(code: string, phone: string): Promise<OrderView | null>` (normaliza teléfono; `null` si no coincide cualquiera de los dos).
@@ -138,7 +140,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 
 - [ ] **Step 1: Write the failing tests:**
   - `unitPriceFor`: sin mayorista → retail; qty por debajo del mínimo → retail; modo `CODE` sin desbloqueo → retail; modo `CODE` desbloqueado y `PUBLIC` con qty≥mínimo → mayorista.
-  - `placeOrder` ignora campos extra de precio: pasar `{... , unitPrice: 1, total: 1, shippingCost: 0}` produce `total` calculado desde la DB (payload manipulado); rechaza `quantity` 0, −1, 1.5, producto inexistente o inactivo, envío sin `shippingZoneId`/dirección, retiro sin `pickupPointId`.
+  - `placeOrder` ignora campos extra de precio: pasar `{... , unitPrice: 1, total: 1, shippingCost: 0}` produce `total` calculado desde la DB (payload manipulado); rechaza `quantity` 0, −1, 1.5, producto inexistente o inactivo, `paymentMethodId`/`pickupPointId`/`shippingZoneId` inactivos o inexistentes, envío sin `shippingZoneId`/dirección, retiro sin `pickupPointId`.
   - Descuenta stock y crea `StockLog`; `expiresAt = now + pendingExpiryHours`; guarda `phone` normalizado y `rawPhone`.
   - **Concurrencia:** con stock=1, dos `placeOrder` simultáneos (`Promise.allSettled`) → exactamente uno resuelve y el otro rechaza con `OutOfStockError`; stock final 0 (no negativo).
   - `cancelOrder` repone stock; llamado dos veces no repone dos veces.
@@ -173,13 +175,14 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 
 **Interfaces:**
 - Consumes: `placeOrder`, `PlaceOrderInput`, `OutOfStockError`, `InvalidOrderError` (T4); `buildOrderWhatsAppUrl` (T3); `ProductCard` (T5).
-- Produces: `POST /api/orders` (body = `PlaceOrderInput` sin `wholesaleUnlocked`; el servidor lo deduce de la cookie) → `201 {code, total, whatsappUrl}` | `409 {error:'out_of_stock', productId}` | `400`; carrito persistido en `localStorage` con `{productId, quantity}` únicamente; `/pedido/[code]` muestra número de pedido, total, instrucciones del medio de pago (alias/CBU para transferencia) y botón grande "Enviar pedido por WhatsApp".
+- Produces: `POST /api/orders` (body = `PlaceOrderInput` sin `wholesaleUnlocked`; el servidor lo deduce de la cookie) → `201 {code, total, whatsappUrl}` | `409 {error:'out_of_stock', productId}` | `400`; carrito persistido en `localStorage` con `{productId, quantity}` únicamente; `/pedido/[code]` muestra número de pedido, total, instrucciones del medio de pago (alias/CBU para transferencia) y botón grande "Enviar pedido por WhatsApp" **solo si** la cookie `httpOnly` de corta vida `lastOrderCode` (puesta por `POST /api/orders`, 2 h) coincide con `[code]`; si no, redirige a `/seguimiento` (spec §7: el código solo no da acceso).
 
 - [ ] **Step 1: Write the failing tests:**
   - `orders-api.test.ts`: POST con precios/total inyectados devuelve total calculado por el servidor; POST con `quantity: 0` → 400; producto sin stock → 409 con `productId`.
+  - GET directo a `/pedido/SM-XXXXXX` sin la cookie `lastOrderCode` → redirige a `/seguimiento` sin mostrar datos del pedido.
   - `checkout.spec.ts` (móvil): agregar 2 productos → abrir carrito → checkout → completar nombre y teléfono, elegir "Retiro en el local" y "Transferencia" → confirmar → ver `SM-` + código, instrucciones de transferencia y el enlace `wa.me/543816116380`; flujo de envío exige zona y dirección; error de stock muestra mensaje claro en español sin perder el carrito.
 - [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** el flujo en pocos pasos (una sola pantalla de checkout con secciones), textos simples, teclado numérico para teléfono (`inputMode="tel"`); al éxito vaciar carrito. El enlace `wa.me` lo arma el servidor con `buildOrderWhatsAppUrl`.
+- [ ] **Step 3: Implement** el flujo en pocos pasos (`POST /api/orders` pasa `wholesaleUnlocked: false` hasta Task 12) (una sola pantalla de checkout con secciones), textos simples, teclado numérico para teléfono (`inputMode="tel"`); al éxito vaciar carrito. El enlace `wa.me` lo arma el servidor con `buildOrderWhatsAppUrl`.
 - [ ] **Step 4: Run** → PASS.
 - [ ] **Step 5: Commit** — `git commit -m "feat: cart, checkout and order confirmation"`.
 
@@ -190,10 +193,10 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 - Test: `tests/service/tracking-api.test.ts`, `tests/e2e/tracking.spec.ts`
 
 **Interfaces:**
-- Consumes: `findOrderForTracking`, `checkRateLimit` (T4).
+- Consumes: `findOrderForTracking`, `expireStaleOrders`, `checkRateLimit` (T4). El handler llama `expireStaleOrders(new Date())` antes de `findOrderForTracking`.
 - Produces: `POST /api/tracking {code, phone}` → `200 OrderView` | `404 {error:'not_found'}` (mismo cuerpo para código o teléfono incorrecto) | `429`; `OrderView = {code, status, paymentStatus, deliveryType, items, subtotal, shippingCost, total, createdAt}` sin datos sensibles de otros pedidos.
 
-- [ ] **Step 1: Write the failing tests:** las 4 variantes de teléfono devuelven 200; código correcto + teléfono incorrecto y código inexistente devuelven el mismo 404 y mismo body; 6.º intento en la ventana → 429; e2e: el formulario acepta el código en minúsculas y con espacios (se normaliza a mayúsculas/trim) y muestra una línea de tiempo `Recibido → Preparando → Listo → Entregado` resaltando el estado actual.
+- [ ] **Step 1: Write the failing tests:** las 4 variantes de teléfono devuelven 200; código correcto + teléfono incorrecto y código inexistente devuelven el mismo 404 y mismo body; 6.º intento en la ventana → 429; pedido con pago pendiente y `expiresAt` en el pasado → la respuesta muestra `CANCELLED` (expiración perezosa); e2e: el formulario acepta el código en minúsculas y con espacios (se normaliza a mayúsculas/trim) y muestra una línea de tiempo `Recibido → Preparando → Listo → Entregado` resaltando el estado actual.
 - [ ] **Step 2: Run** → FAIL.
 - [ ] **Step 3: Implement** página con 2 campos y un botón grande; clave de rate limit = IP + código.
 - [ ] **Step 4: Run** → PASS.
@@ -202,7 +205,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 ### Task 8: Autenticación del admin
 
 **Files:**
-- Create: `src/lib/auth.ts`, `src/middleware.ts`, `src/app/admin/login/page.tsx`, `src/app/admin/layout.tsx`, `src/app/api/admin/login/route.ts`, `src/app/api/admin/logout/route.ts`, `scripts/create-admin.ts`
+- Create: `src/lib/auth.ts`, `src/middleware.ts` (o `src/proxy.ts` según la versión de Next instalada), `src/app/admin/login/page.tsx`, `src/app/admin/layout.tsx`, `src/app/api/admin/login/route.ts`, `src/app/api/admin/logout/route.ts`, `scripts/create-admin.ts`
 - Test: `tests/service/auth.test.ts`, `tests/e2e/admin-login.spec.ts`
 
 **Interfaces:**
@@ -222,7 +225,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 
 **Interfaces:**
 - Consumes: `requireAdmin` (T8), `parseARSToCentavos` (T3), `StockLog` (T1).
-- Produces: `saveProduct(input): Promise<Product>`, `adjustStock(productId, delta, reason)` (escribe `StockLog`, nunca deja stock <0), `bulkAdjustPrices(categoryId: string | null, percent: number): Promise<number>` (redondea a entero de centavos; también mayorista), `saveUpload(file: File): Promise<string>` (valida tipo JPG/PNG/WebP y ≤5 MB, guarda bajo `UPLOAD_DIR`, devuelve ruta servida por `/api/uploads/...` con nombre no adivinable).
+- Consumes: `logAudit` (T4). Produces: `saveProduct(input): Promise<Product>`, `adjustStock(productId, delta, reason)` (escribe `StockLog`, nunca deja stock <0), `bulkAdjustPrices(categoryId: string | null, percent: number): Promise<number>` (redondea a entero de centavos; también mayorista), `saveUpload(file: File): Promise<string>` (valida tipo JPG/PNG/WebP y ≤5 MB, guarda bajo `UPLOAD_DIR`, devuelve ruta servida por `/api/uploads/...` con nombre no adivinable).
 
 - [ ] **Step 1: Write the failing tests:** crear producto con precio `"1.500,00"` guarda 150000; mayorista sin mínimo → error de validación; `adjustStock` con delta que dejaría stock negativo → error; `bulkAdjustPrices(cat, 10)` sube 10 % solo esa categoría; cada cambio de precio o stock en el admin escribe un `AuditLog` con el email del admin y valores antes/después; subida de `.exe` o >5 MB rechazada; e2e (móvil): crear producto con foto, bajar su stock a 0 y verlo "Sin stock" en el sitio público, y ver la alerta de stock bajo en el listado.
 - [ ] **Step 2: Run** → FAIL.
@@ -237,8 +240,8 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 - Test: `tests/service/orders-admin.test.ts`, `tests/e2e/admin-orders.spec.ts`
 
 **Interfaces:**
-- Consumes: `setOrderStatus`, `setPaymentStatus`, `cancelOrder`, `markOrderSeen`, `expireStaleOrders` (T4), `requireAdmin` (T8).
-- Produces: listado filtrable por estado con contador de pedidos nuevos (`isNew`), detalle con acciones "Marcar pagado", avanzar estado, cancelar, "Extender plazo de pago" (`extendExpiry(orderId, hours)`), y botón "Escribir por WhatsApp" a la clienta (`wa.me/54<phone>` con mensaje del estado).
+- Consumes: `setOrderStatus`, `setPaymentStatus`, `cancelOrder`, `markOrderSeen`, `expireStaleOrders`, `extendExpiry` (T4), `requireAdmin` (T8).
+- Produces: listado filtrable por estado con contador de pedidos nuevos (`isNew`), detalle con acciones "Marcar pagado", avanzar estado, cancelar, "Extender plazo de pago" (usa `extendExpiry`), y botón "Escribir por WhatsApp" a la clienta (`wa.me/54<phone>` con mensaje del estado).
 
 - [ ] **Step 1: Write the failing tests:** abrir el detalle limpia `isNew`; cancelar repone stock; `extendExpiry` mueve `expiresAt` y evita la expiración; el listado llama a `expireStaleOrders` perezosamente; e2e: pedido creado en el sitio aparece como nuevo, Elías lo pasa a "Listo" y la clienta lo ve en `/seguimiento`.
 - [ ] **Step 2: Run** → FAIL.
@@ -266,6 +269,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 
 **Files:**
 - Create: `src/lib/wholesale.ts`, `src/app/api/wholesale/unlock/route.ts`, `src/components/WholesaleBanner.tsx`, `src/components/WholesaleTable.tsx`, `src/app/(public)/mayoristas/page.tsx`
+- Modify: `src/app/api/orders/route.ts` (leer cookie y pasar `wholesaleUnlocked`), `src/app/(public)/layout.tsx` (montar `<WholesaleBanner/>`)
 - Test: `tests/unit/wholesale.test.ts`, `tests/service/wholesale-api.test.ts`, `tests/e2e/wholesale.spec.ts`
 
 **Interfaces:**
@@ -274,7 +278,7 @@ Tras T1/T3/T4, las pistas **pública** (T5→T6→T7→T12) y **admin** (T8→T9
 
 - [ ] **Step 1: Write the failing tests:** código correcto desbloquea y devuelve precios mayoristas; código erróneo → 401 sin cookie; cambiar `wholesaleCode` hace que la cookie vieja deje de valer; en modo `PUBLIC` la tabla muestra mayorista sin código y el carrito aplica el precio al alcanzar el mínimo; e2e a 1280 px: tabla visible y se agrega al carrito por cantidad.
 - [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement.** Pasar `wholesaleUnlocked` a `placeOrder` desde la cookie en `POST /api/orders` (T6).
+- [ ] **Step 3: Implement.** En `POST /api/orders` (T6) reemplazar el `wholesaleUnlocked: false` provisional por `isWholesaleUnlocked(cookie, settings.wholesaleCode)`.
 - [ ] **Step 4: Run** → PASS.
 - [ ] **Step 5: Commit** — `git commit -m "feat: wholesale mode with access code and desktop table"`.
 
