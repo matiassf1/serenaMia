@@ -56,8 +56,7 @@ describe('POST /api/orders', () => {
     const body = await res.json()
     expect(body.code).toMatch(/^SM-[2-9A-HJKMNP-Z]{6}$/)
     expect(body.total).toBe(20000)
-    const settings = await db.storeSettings.findUniqueOrThrow({ where: { id: 1 } })
-    expect(body.whatsappUrl).toContain(`https://wa.me/${settings.whatsapp.replace(/\D/g, '')}?text=`)
+    expect(body.whatsappUrl).toContain('https://wa.me/543816116380?text=')
     expect(decodeURIComponent(body.whatsappUrl)).toContain(body.code)
     const cookie = res.headers.get('set-cookie') ?? ''
     expect(cookie).toContain(`lastOrderCode=${body.code}`)

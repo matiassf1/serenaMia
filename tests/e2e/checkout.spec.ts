@@ -81,7 +81,7 @@ test('retiro + transferencia: del carrito a la confirmación con WhatsApp', asyn
   await expect(page.getByRole('heading', { name: /SM-[2-9A-HJKMNP-Z]{6}/ })).toBeVisible()
   await expect(page.getByText(/Alias: SERENA\.MIA\.EJEMPLO/)).toBeVisible()
   const wa = page.getByRole('link', { name: 'Enviar pedido por WhatsApp' })
-  await expect(wa).toHaveAttribute('href', /wa\.me\/54(9)?3816116380\?text=/)
+  await expect(wa).toHaveAttribute('href', /wa\.me\/543816116380\?text=/)
   expect((await wa.boundingBox())!.height).toBeGreaterThanOrEqual(44)
   await shot(page, 'pedido')
 

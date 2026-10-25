@@ -3,6 +3,7 @@ import { connection } from 'next/server'
 import type { BusinessHours } from '@prisma/client'
 import { db } from '@/lib/db'
 import { getOpenStatus } from '@/lib/hours'
+import { whatsappDigits } from '@/lib/whatsapp'
 
 const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -42,7 +43,7 @@ export async function StoreHeader() {
     db.hoursException.findMany(),
   ])
   const status = getOpenStatus(new Date(), hours, exceptions)
-  const waDigits = settings.whatsapp.replace(/\D/g, '')
+  const waDigits = whatsappDigits(settings.whatsapp)
 
   return (
     <header className="border-b border-blush-border bg-gradient-to-b from-blush to-white">

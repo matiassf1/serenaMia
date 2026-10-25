@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildOrderWhatsAppUrl } from '@/lib/whatsapp'
+import { buildOrderWhatsAppUrl, whatsappDigits } from '@/lib/whatsapp'
 
 describe('buildOrderWhatsAppUrl', () => {
   const url = buildOrderWhatsAppUrl('543816116380', {
@@ -27,10 +27,22 @@ describe('buildOrderWhatsAppUrl', () => {
     expect(text).toContain('Retiro en el local')
     expect(text).toContain('\n')
   })
+  it.each(['+54 9 381 611-6380', '+54 381 611-6380', '543816116380', '5493816116380', '381 611-6380', '0381 611-6380'])(
+    'deja %s como wa.me/543816116380',
+    (shop) => {
+      const u = buildOrderWhatsAppUrl(shop, {
+        code: 'SM-AAAAAA', customerName: 'A', items: [], total: 0, deliveryLabel: '', paymentLabel: '',
+      })
+      expect(u.startsWith('https://wa.me/543816116380?text=')).toBe(true)
+    },
+  )
+  it('whatsappDigits devuelve siempre 543816116380', () => {
+    expect(whatsappDigits('+54 9 381 611-6380')).toBe('543816116380')
+  })
   it('acepta un número con formato y lo deja solo en dígitos', () => {
     const u = buildOrderWhatsAppUrl('+54 9 381 611-6380', {
       code: 'SM-AAAAAA', customerName: 'A', items: [], total: 0, deliveryLabel: '', paymentLabel: '',
     })
-    expect(u.startsWith('https://wa.me/5493816116380?text=')).toBe(true)
+    expect(u.startsWith('https://wa.me/543816116380?text=')).toBe(true)
   })
 })
