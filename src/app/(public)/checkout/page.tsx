@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { db } from '@/lib/db'
+import { PageContainer } from '@/components/PageContainer'
 import { CheckoutForm } from './CheckoutForm'
 
 export const metadata = { title: 'Tu pedido · Serena Mia' }
@@ -17,11 +18,11 @@ async function Options() {
 
 export default function CheckoutPage() {
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-5">
+    <PageContainer>
       <h2 className="font-script text-3xl font-bold text-brand-ink">Completá tu pedido</h2>
       <Suspense fallback={<p className="py-10 text-center text-muted">Cargando…</p>}>
         <Options />
       </Suspense>
-    </div>
+    </PageContainer>
   )
 }

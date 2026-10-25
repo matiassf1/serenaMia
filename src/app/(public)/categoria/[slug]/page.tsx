@@ -1,29 +1,26 @@
 import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
+import { connection } from 'next/server'
 import { db } from '@/lib/db'
-import { CategoryNav } from '@/components/CategoryNav'
-import { SearchBox } from '@/components/SearchBox'
-import { ProductGrid } from '@/components/ProductGrid'
+import { CatalogSection, CatalogSkeleton } from '@/components/CatalogSection'
+import { HomeHero, HomeHeroSkeleton } from '@/components/HomeHero'
 
-async function CategoryCatalog({ params }: Pick<PageProps<'/categoria/[slug]'>, 'params'>) {
-  const { slug } = await params
-  const categories = await db.category.findMany({ orderBy: { sortOrder: 'asc' } })
-  const current = categories.find((c) => c.slug === slug)
-  if (!current) notFound()
-  return (
-    <div className="flex flex-col gap-5">
-      <SearchBox />
-      <CategoryNav categories={categories} activeSlug={slug} />
-      <h2 className="font-script text-3xl font-bold text-brand-ink">{current.name}</h2>
-      <ProductGrid categorySlug={slug} />
-    </div>
-  )
+async function Category({ params, searchParams }: Pick<PageProps<'/categoria/[slug]'>, 'params' | 'searchParams'>) {
+  await connection()
+  const [{ slug }, { q }] = await Promise.all([params, searchParams])
+  if (!(await db.category.findUnique({ where: { slug }, select: { id: true } }))) notFound()
+  return <CatalogSection initialSlug={slug} initialQuery={typeof q === 'string' ? q : undefined} />
 }
 
-export default function CategoryPage({ params }: PageProps<'/categoria/[slug]'>) {
+export default function CategoryPage({ params, searchParams }: PageProps<'/categoria/[slug]'>) {
   return (
-    <Suspense fallback={<p className="py-10 text-center text-muted">Cargando productos…</p>}>
-      <CategoryCatalog params={params} />
-    </Suspense>
+    <>
+      <Suspense fallback={<HomeHeroSkeleton />}>
+        <HomeHero />
+      </Suspense>
+      <Suspense fallback={<CatalogSkeleton />}>
+        <Category params={params} searchParams={searchParams} />
+      </Suspense>
+    </>
   )
 }

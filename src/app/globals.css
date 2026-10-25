@@ -27,6 +27,45 @@
   --color-muted: var(--muted);
   --font-sans: var(--font-geist-sans);
   --font-script: var(--font-script);
+
+  --animate-fade-up: fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-drift: drift 22s ease-in-out infinite;
+  --animate-drift-slow: drift 34s ease-in-out infinite reverse;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-sparkle: sparkle 4.5s ease-in-out infinite;
+  --animate-pulse-dot: pulse-dot 2s ease-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes drift {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    33% { transform: translate3d(5%, 8%, 0) scale(1.08); }
+    66% { transform: translate3d(-6%, 3%, 0) scale(0.95); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+    50% { transform: translateY(-12px) rotate(1.5deg); }
+  }
+  @keyframes sparkle {
+    0%, 100% { opacity: 0.25; transform: scale(0.7) rotate(0deg); }
+    50% { opacity: 0.95; transform: scale(1.1) rotate(25deg); }
+  }
+  @keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 rgb(34 197 94 / 0.55); }
+    80%, 100% { box-shadow: 0 0 0 9px rgb(34 197 94 / 0); }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
 }
 
 body {
@@ -42,4 +81,26 @@ button:focus-visible,
 input:focus-visible {
   outline: 3px solid var(--violet);
   outline-offset: 2px;
+}
+
+/* Skeleton con brillo para cargas parciales. */
+.skeleton {
+  background: linear-gradient(90deg, var(--blush) 25%, #ffe9f4 50%, var(--blush) 75%);
+  background-size: 200% 100%;
+}
+
+/* Respeta a quien pidió menos movimiento: sin animaciones ni desplazamientos. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
 }

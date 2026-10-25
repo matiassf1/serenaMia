@@ -1,33 +1,28 @@
 'use client'
 
 import Link from 'next/link'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { formatPrice } from '@/lib/money'
 import { MAX_QTY } from '@/lib/cart'
 import { cartUnitPrice, useCart, useCartProducts } from './CartProvider'
+import { OPEN_CART_EVENT } from './CartButton'
 
 const stepBtn =
   'flex size-11 items-center justify-center rounded-full border-2 border-brand-deep bg-white text-xl font-bold text-brand-ink active:bg-blush disabled:border-gray-300 disabled:text-gray-600'
 
 export function CartDrawer() {
-  const { items, count, setQty, remove } = useCart()
+  const { items, setQty, remove } = useCart()
   const { byId, ready, estimatedTotal } = useCartProducts(items)
   const dialog = useRef<HTMLDialogElement>(null)
 
+  useEffect(() => {
+    const open = () => dialog.current?.showModal()
+    window.addEventListener(OPEN_CART_EVENT, open)
+    return () => window.removeEventListener(OPEN_CART_EVENT, open)
+  }, [])
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => dialog.current?.showModal()}
-        className="fixed bottom-4 right-4 z-40 flex min-h-12 items-center gap-2 rounded-full bg-brand-deep px-5 text-base font-semibold text-white shadow-lg active:bg-brand-ink"
-      >
-        <span aria-hidden>🛍️</span>
-        <span>Carrito</span>
-        {count > 0 && (
-          <span className="min-w-6 rounded-full bg-white px-1.5 text-center text-sm font-bold text-brand-ink">{count}</span>
-        )}
-      </button>
-
       <dialog
         ref={dialog}
         aria-labelledby="cart-title"

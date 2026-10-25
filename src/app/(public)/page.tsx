@@ -1,27 +1,27 @@
 import { Suspense } from 'react'
-import { db } from '@/lib/db'
-import { CategoryNav } from '@/components/CategoryNav'
-import { SearchBox } from '@/components/SearchBox'
-import { ProductGrid } from '@/components/ProductGrid'
+import { CatalogSection, CatalogSkeleton } from '@/components/CatalogSection'
+import { HomeHero, HomeHeroSkeleton } from '@/components/HomeHero'
+import { WholesaleBanner } from '@/components/WholesaleBanner'
 
 async function Catalog({ searchParams }: Pick<PageProps<'/'>, 'searchParams'>) {
   const { q } = await searchParams
-  const term = typeof q === 'string' ? q : undefined
-  const categories = await db.category.findMany({ orderBy: { sortOrder: 'asc' } })
-  return (
-    <div className="flex flex-col gap-5">
-      <SearchBox defaultValue={term} />
-      <CategoryNav categories={categories} />
-      <h2 className="font-script text-3xl font-bold text-brand-ink">{term ? `Resultados para “${term}”` : 'Nuestros productos'}</h2>
-      <ProductGrid q={term} />
-    </div>
-  )
+  return <CatalogSection initialQuery={typeof q === 'string' ? q : undefined} />
 }
 
 export default function HomePage({ searchParams }: PageProps<'/'>) {
   return (
-    <Suspense fallback={<p className="py-10 text-center text-muted">Cargando productos…</p>}>
-      <Catalog searchParams={searchParams} />
-    </Suspense>
+    <>
+      <Suspense fallback={<HomeHeroSkeleton />}>
+        <HomeHero />
+      </Suspense>
+      <div className="mx-auto w-full max-w-7xl px-4 md:px-8">
+        <Suspense>
+          <WholesaleBanner />
+        </Suspense>
+      </div>
+      <Suspense fallback={<CatalogSkeleton />}>
+        <Catalog searchParams={searchParams} />
+      </Suspense>
+    </>
   )
 }

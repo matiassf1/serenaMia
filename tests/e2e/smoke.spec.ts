@@ -44,10 +44,11 @@ test('recorrido completo: pedido de la clienta, gestión de Elías y seguimiento
   // 1. La home muestra los datos del local.
   const settings = await db.storeSettings.findUniqueOrThrow({ where: { id: 1 } })
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: settings.name })).toBeVisible()
-  await expect(page.getByText(settings.address)).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Cómo llegar' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'WhatsApp' })).toBeVisible()
+  const main = page.getByRole('main') // el pie repite dirección y enlaces
+  await expect(main.getByRole('heading', { level: 1, name: settings.name })).toBeVisible()
+  await expect(main.getByText(settings.address)).toBeVisible()
+  await expect(main.getByRole('link', { name: 'Cómo llegar' })).toBeVisible()
+  await expect(main.getByRole('link', { name: 'WhatsApp', exact: true })).toBeVisible()
   await expect(page.getByRole('status')).toContainText(/Abierto|Cerrado|Abre|Cierra/)
 
   // 2. Agrega un producto.

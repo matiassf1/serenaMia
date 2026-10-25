@@ -20,21 +20,24 @@ export function stockState(p: Pick<CardProduct, 'stock' | 'lowStockThreshold'>) 
   return { label: 'En stock', cls: 'bg-green-100 text-green-800', available: true }
 }
 
-export function ProductCard({ product }: { product: CardProduct }) {
+export function ProductCard({ product, enterDelayMs }: { product: CardProduct; enterDelayMs?: number }) {
   const state = stockState(product)
   return (
     <li
       data-testid="product-card"
-      className="flex flex-col overflow-hidden rounded-2xl border border-blush-border bg-white shadow-sm"
+      style={enterDelayMs === undefined ? undefined : { animationDelay: `${enterDelayMs}ms` }}
+      className={`group flex flex-col overflow-hidden rounded-2xl border border-blush-border bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand/15 ${
+        enterDelayMs === undefined ? '' : 'animate-fade-up'
+      }`}
     >
-      <div className="relative aspect-square bg-blush">
+      <div className="relative aspect-square bg-blush md:aspect-[4/3]">
         {product.imagePath ? (
           <Image
             src={`/api/uploads/${product.imagePath}`}
             alt=""
             fill
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-            className="object-cover"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <Image src="/logo.png" alt="" width={72} height={72} className="absolute left-1/2 top-1/2 size-[72px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-60" />
