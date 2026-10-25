@@ -4,6 +4,13 @@ export function formatARS(centavos: number): string {
   return ars.format(centavos / 100)
 }
 
+const arsWhole = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
+
+/** Precio para mostrar: sin ",00" en importes enteros; con decimales solo si hay centavos. */
+export function formatPrice(centavos: number): string {
+  return centavos % 100 === 0 ? arsWhole.format(centavos / 100) : formatARS(centavos)
+}
+
 /** Acepta `1.234,50`, `1234,5`, `1234.5` y `$ 1.234`. Devuelve centavos enteros o null. */
 export function parseARSToCentavos(input: string): number | null {
   let s = input.replace(/[\s$]/g, '')

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatARS, parseARSToCentavos } from '@/lib/money'
+import { formatARS, formatPrice, parseARSToCentavos } from '@/lib/money'
 
 describe('money', () => {
   it('formatARS(123450) contiene 1.234,50', () => {
@@ -14,5 +14,21 @@ describe('money', () => {
   it('parseARSToCentavos devuelve null para entradas inválidas', () => {
     expect(parseARSToCentavos('abc')).toBeNull()
     expect(parseARSToCentavos('')).toBeNull()
+  })
+
+  describe('formatPrice (precio para mostrar)', () => {
+    it('no muestra ,00 en importes enteros', () => {
+      expect(formatPrice(450000)).toContain('4.500')
+      expect(formatPrice(450000)).not.toContain(',')
+      expect(formatPrice(100)).not.toContain(',')
+    })
+    it('mantiene los decimales cuando hay centavos', () => {
+      expect(formatPrice(123450)).toContain('1.234,50')
+      expect(formatPrice(5)).toContain('0,05')
+    })
+    it('maneja el cero', () => {
+      expect(formatPrice(0)).toContain('0')
+      expect(formatPrice(0)).not.toContain(',')
+    })
   })
 })

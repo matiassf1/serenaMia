@@ -1,5 +1,6 @@
 import Image from 'next/image'
-import { formatARS } from '@/lib/money'
+import { formatPrice } from '@/lib/money'
+import { AddToCartButton } from './AddToCartButton'
 
 export type CardProduct = {
   id: number
@@ -38,16 +39,9 @@ export function ProductCard({ product }: { product: CardProduct }) {
       </div>
       <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="text-base font-semibold leading-snug">{product.name}</h3>
-        <p className="text-lg font-bold text-brand-ink">{formatARS(product.retailPrice)}</p>
+        <p className="text-lg font-bold text-brand-ink">{formatPrice(product.retailPrice)}</p>
         <p className={`w-fit rounded-full px-2.5 py-0.5 text-sm font-medium ${state.cls}`}>{state.label}</p>
-        <button
-          type="button"
-          disabled={!state.available}
-          aria-label={`Agregar ${product.name}`}
-          className="mt-auto min-h-12 rounded-full bg-brand-deep px-4 text-base font-semibold text-white active:bg-brand-ink disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-700"
-        >
-          Agregar
-        </button>
+        <AddToCartButton productId={product.id} name={product.name} disabled={!state.available} />
       </div>
     </li>
   )
