@@ -89,6 +89,17 @@ describe('POST /api/admin/orders/[id]', () => {
     expect((await act(id, { action: 'status', status: 'READY' })).status).toBe(409)
   })
 
+  it('"paid" sobre un pedido cancelado → 409 con mensaje claro y el pago sigue pendiente', async () => {
+    const { id } = await newOrder()
+    await act(id, { action: 'cancel' })
+    const res = await act(id, { action: 'paid' })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/cancelado/i)
+    const o = await db.order.findUniqueOrThrow({ where: { id } })
+    expect(o.status).toBe('CANCELLED')
+    expect(o.paymentStatus).toBe('PENDING')
+  })
+
   it('pedido inexistente responde 404', async () => {
     expect((await act(99999, { action: 'paid' })).status).toBe(404)
   })

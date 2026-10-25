@@ -193,8 +193,11 @@ export async function setOrderStatus(orderId: number, status: OrderStatus): Prom
 }
 
 export async function setPaymentStatus(orderId: number, paymentStatus: PaymentStatus): Promise<void> {
-  const res = await db.order.updateMany({ where: { id: orderId }, data: { paymentStatus } })
-  if (res.count !== 1) throw new InvalidOrderError('order_not_found')
+  const res = await db.order.updateMany({ where: { id: orderId, status: { not: 'CANCELLED' } }, data: { paymentStatus } })
+  if (res.count === 1) return
+  await assertOrderExists(orderId)
+  // Un pedido cancelado ya repuso su stock: cobrarlo dejaría plata tomada sin mercadería reservada.
+  throw new InvalidOrderError('order_cancelled')
 }
 
 export async function markOrderSeen(orderId: number): Promise<void> {

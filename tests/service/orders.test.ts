@@ -320,6 +320,17 @@ describe('estado y marcas del pedido', () => {
     expect(await stockOf(ids.product)).toBe(10)
   })
 
+  it('setPaymentStatus rechaza un pedido cancelado con order_cancelled y no lo marca pagado', async () => {
+    const { id } = await placeOrder(baseInput())
+    await cancelOrder(id)
+    await expect(setPaymentStatus(id, 'PAID')).rejects.toMatchObject({ name: 'InvalidOrderError', reason: 'order_cancelled' })
+    expect((await db.order.findUniqueOrThrow({ where: { id } })).paymentStatus).toBe('PENDING')
+  })
+
+  it('setPaymentStatus sobre un pedido inexistente sigue siendo order_not_found', async () => {
+    await expect(setPaymentStatus(999999, 'PAID')).rejects.toMatchObject({ reason: 'order_not_found' })
+  })
+
   it('markOrderSeen limpia isNew', async () => {
     const { id } = await placeOrder(baseInput())
     await markOrderSeen(id)

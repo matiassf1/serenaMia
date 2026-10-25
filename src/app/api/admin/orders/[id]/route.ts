@@ -50,7 +50,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (e) {
     if (e instanceof InvalidOrderError) {
       if (e.reason === 'order_not_found') return NextResponse.json({ error: 'El pedido no existe.' }, { status: 404 })
-      if (e.reason === 'order_cancelled') return NextResponse.json({ error: 'El pedido está cancelado y no se puede cambiar.' }, { status: 409 })
+      if (e.reason === 'order_cancelled') {
+        const error =
+          body.action === 'paid'
+            ? 'El pedido está cancelado: no se puede marcar como pagado porque el stock ya se devolvió. Si la clienta pagó, devolvele el dinero o armá un pedido nuevo.'
+            : 'El pedido está cancelado y no se puede cambiar.'
+        return NextResponse.json({ error }, { status: 409 })
+      }
     }
     throw e
   }
