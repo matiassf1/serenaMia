@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WholesaleMode {
+  PUBLIC
+  CODE
+}
+
+enum OrderStatus {
+  RECEIVED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum DeliveryType {
+  PICKUP
+  SHIPPING
+}
+
+// Singleton: siempre id = 1.
+model StoreSettings {
+  id                 Int           @id @default(1)
+  name               String
+  tagline            String
+  address            String
+  whatsapp           String
+  instagram          String
+  mapsUrl            String
+  logoPath           String?
+  wholesaleBanner    String
+  wholesaleMode      WholesaleMode @default(PUBLIC)
+  wholesaleCode      String?
+  pendingExpiryHours Int           @default(48)
+}
+
+// Varios tramos por día permitidos (weekday 0 = domingo … 6 = sábado).
+model BusinessHours {
+  id        Int    @id @default(autoincrement())
+  weekday   Int
+  opensAt   String // "HH:mm"
+  closesAt  String // "HH:mm"
+
+  @@unique([weekday, opensAt])
+}
+
+model HoursException {
+  id       Int      @id @default(autoincrement())
+  date     DateTime @db.Date
+  closed   Boolean  @default(true)
+  opensAt  String?
+  closesAt String?
+  note     String   @default("")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0)
+  products  Product[]
+}
+
+model Product {
+  id                Int         @id @default(autoincrement())
+  name              String
+  slug              String      @unique
+  description       String      @default("")
+  categoryId        Int
+  category          Category    @relation(fields: [categoryId], references: [id])
+  retailPrice       Int // centavos ARS
+  wholesalePrice    Int? // centavos ARS
+  wholesaleMinQty   Int?
+  stock             Int         @default(0)
+  lowStockThreshold Int         @default(3)
+  active            Boolean     @default(true)
+  imagePath         String?
+  orderItems        OrderItem[]
+  stockLogs         StockLog[]
+}
+
+model PaymentMethod {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  instructions String  @default("")
+  active       Boolean @default(true)
+  sortOrder    Int     @default(0)
+  orders       Order[]
+}
+
+model PickupPoint {
+  id      Int     @id @default(autoincrement())
+  name    String  @unique
+  address String
+  active  Boolean @default(true)
+  orders  Order[]
+}
+
+model ShippingZone {
+  id     Int     @id @default(autoincrement())
+  name   String  @unique
+  cost   Int // centavos ARS
+  active Boolean @default(true)
+  orders Order[]
+}
+
+model Order {
+  id              Int           @id @default(autoincrement())
+  code            String        @unique
+  customerName    String
+  phone           String // normalizado
+  rawPhone        String
+  status          OrderStatus   @default(RECEIVED)
+  paymentStatus   PaymentStatus @default(PENDING)
+  deliveryType    DeliveryType
+  pickupPointId   Int?
+  pickupPoint     PickupPoint?  @relation(fields: [pickupPointId], references: [id])
+  shippingZoneId  Int?
+  shippingZone    ShippingZone? @relation(fields: [shippingZoneId], references: [id])
+  shippingAddress String?
+  shippingCost    Int           @default(0)
+  paymentMethodId Int
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  subtotal        Int
+  total           Int
+  isNew           Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  expiresAt       DateTime?
+  items           OrderItem[]
+
+  @@index([phone])
+  @@index([status, paymentStatus, expiresAt])
+}
+
+model OrderItem {
+  id          Int     @id @default(autoincrement())
+  orderId     Int
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product @relation(fields: [productId], references: [id])
+  productName String
+  unitPrice   Int
+  quantity    Int
+  wholesale   Boolean @default(false)
+}
+
+model AdminUser {
+  id           Int    @id @default(autoincrement())
+  email        String @unique
+  passwordHash String
+}
+
+model StockLog {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  delta     Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  adminEmail String
+  action     String
+  entity     String
+  entityId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entity, entityId])
+}
