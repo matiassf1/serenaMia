@@ -43,18 +43,25 @@ export type OrderView = {
   createdAt: Date
 }
 
+// Topes de cordura: Postgres Int es de 32 bits; un pedido tiene pocos renglones y cantidades razonables.
+const DB_INT_MAX = 2_147_483_647
+export const MAX_ORDER_LINES = 30
+export const MAX_LINE_QUANTITY = 999
+const dbId = z.number().int().min(1).max(DB_INT_MAX)
+
 // Solo estos campos se leen del cliente: zod descarta cualquier precio, total o costo de envío extra.
 const placeOrderSchema = z.object({
   items: z
-    .array(z.object({ productId: z.number().int(), quantity: z.number().int().min(1) }))
-    .min(1),
+    .array(z.object({ productId: dbId, quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY) }))
+    .min(1)
+    .max(MAX_ORDER_LINES),
   customerName: z.string().trim().min(1).max(120),
   phone: z.string().max(40),
   deliveryType: z.enum(['PICKUP', 'SHIPPING']),
-  pickupPointId: z.number().int().optional(),
-  shippingZoneId: z.number().int().optional(),
+  pickupPointId: dbId.optional(),
+  shippingZoneId: dbId.optional(),
   shippingAddress: z.string().trim().max(300).optional(),
-  paymentMethodId: z.number().int(),
+  paymentMethodId: dbId,
   wholesaleUnlocked: z.boolean(),
 })
 

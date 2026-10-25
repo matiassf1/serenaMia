@@ -148,3 +148,23 @@ test('una cookie lastOrderCode falsificada con el código a secas NO abre /pedid
   await expect(page.getByRole('link', { name: 'Enviar pedido por WhatsApp' })).toHaveCount(0)
   await expect(page.locator('body')).not.toContainText('Calle Falsa')
 })
+
+test('doble toque en "Confirmar pedido": un solo POST y el botón queda deshabilitado mientras envía', async ({ page }) => {
+  let posts = 0
+  await page.route('**/api/orders', async (route) => {
+    posts++
+    await new Promise((r) => setTimeout(r, 800)) // respuesta lenta: ventana para el segundo toque
+    await route.continue()
+  })
+  await addToCart(page, A)
+  await page.goto('/checkout')
+  await page.getByLabel('Tu nombre').fill('Ana Pérez')
+  await page.getByLabel('Tu teléfono').fill(PHONE)
+  await page.getByLabel('Retiro en el local').check()
+  await page.getByLabel('Efectivo').check()
+  const submit = page.getByRole('button', { name: 'Confirmar pedido' })
+  await submit.dblclick()
+  await expect(page.getByRole('button', { name: 'Enviando…' })).toBeDisabled()
+  await expect(page).toHaveURL(/\/pedido\/SM-/)
+  expect(posts).toBe(1)
+})

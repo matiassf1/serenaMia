@@ -8,10 +8,10 @@ import { resetDb } from './helpers'
 
 let ids: { product: number; wholesale: number; outOfStock: number; inactive: number; payment: number; pickup: number; zone: number }
 
-function req(body: unknown, raw = false) {
+function req(body: unknown, raw = false, ip?: string) {
   return new Request('http://localhost/api/orders', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}) },
     body: raw ? (body as string) : JSON.stringify(body),
   })
 }
@@ -121,5 +121,67 @@ describe('POST /api/orders', () => {
     expect(await res.json()).toEqual({ error: 'out_of_stock', productId: ids.outOfStock })
     expect(res.headers.get('set-cookie')).toBeNull()
     expect(await db.order.count()).toBe(0)
+  })
+
+  it('400 con ids fuera del rango de la base (no 500) y con demasiados renglones o cantidad absurda', async () => {
+    expect((await POST(req(valid({ items: [{ productId: 3_000_000_000, quantity: 1 }] })))).status).toBe(400)
+    expect((await POST(req(valid({ paymentMethodId: 3_000_000_000 })))).status).toBe(400)
+    expect((await POST(req(valid({ pickupPointId: 3_000_000_000 })))).status).toBe(400)
+    expect((await POST(req(valid({ items: [{ productId: ids.product, quantity: 1000 }] })))).status).toBe(400)
+    const many = Array.from({ length: 31 }, (_, i) => ({ productId: ids.product + i, quantity: 1 }))
+    expect((await POST(req(valid({ items: many })))).status).toBe(400)
+    expect(await db.order.count()).toBe(0)
+  })
+
+  it('rechaza cuerpos enormes sin procesarlos', async () => {
+    const res = await POST(req(valid({ customerName: 'a'.repeat(200_000) })))
+    expect(res.status).toBe(413)
+    expect(await db.order.count()).toBe(0)
+  })
+})
+
+describe('POST /api/orders: límite de pedidos', () => {
+  const phoneN = (i: number) => `381 611-${String(1000 + i)}`
+
+  it('por teléfono normalizado: 5 por hora aunque cambie la IP y el formato; el 6.º da 429 sin reservar stock', async () => {
+    const formats = ['381 611-6380', '3816116380', '+54 9 381 611 6380', '0381 611-6380', '(381) 6116380']
+    for (let i = 0; i < 5; i++) {
+      expect((await POST(req(valid({ phone: formats[i], items: [{ productId: ids.product, quantity: 1 }] }), false, `198.51.100.${i + 1}`))).status).toBe(201)
+    }
+    const stockBefore = (await db.product.findUniqueOrThrow({ where: { id: ids.product } })).stock
+    const res = await POST(req(valid({ phone: '381-611-6380' }), false, '203.0.113.77'))
+    expect(res.status).toBe(429)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(await db.order.count()).toBe(5)
+    expect((await db.product.findUniqueOrThrow({ where: { id: ids.product } })).stock).toBe(stockBefore)
+  })
+
+  it('por IP: el 11.º intento desde la misma IP da 429 aunque cambie el teléfono; otra IP no se ve afectada', async () => {
+    await db.product.update({ where: { id: ids.product }, data: { stock: 100 } })
+    for (let i = 0; i < 10; i++) {
+      expect((await POST(req(valid({ phone: phoneN(i), items: [{ productId: ids.product, quantity: 1 }] }), false, '203.0.113.5'))).status).toBe(201)
+    }
+    expect((await POST(req(valid({ phone: phoneN(50) }), false, '203.0.113.5'))).status).toBe(429)
+    expect((await POST(req(valid({ phone: phoneN(51) }), false, '203.0.113.6'))).status).toBe(201)
+  })
+
+  it('variar el prefijo de X-Forwarded-For no esquiva el límite por IP', async () => {
+    await db.product.update({ where: { id: ids.product }, data: { stock: 100 } })
+    for (let i = 0; i < 10; i++) {
+      const r = await POST(req(valid({ phone: phoneN(i), items: [{ productId: ids.product, quantity: 1 }] }), false, `1.2.3.${i}, 198.51.100.9`))
+      expect(r.status).toBe(201)
+    }
+    expect((await POST(req(valid({ phone: phoneN(60) }), false, '1.2.3.99, 198.51.100.9'))).status).toBe(429)
+  })
+
+  it('una ráfaga en paralelo del mismo teléfono no pasa de 5 pedidos', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        POST(req(valid({ items: [{ productId: ids.product, quantity: 1 }] }), false, `198.51.102.${i + 1}`)),
+      ),
+    )
+    expect(results.filter((r) => r.status === 201)).toHaveLength(5)
+    expect(results.filter((r) => r.status === 429)).toHaveLength(15)
+    expect(await db.order.count()).toBe(5)
   })
 })

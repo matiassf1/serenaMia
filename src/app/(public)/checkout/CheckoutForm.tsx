@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useCart, useCartProducts } from '@/components/CartProvider'
 import { formatPrice } from '@/lib/money'
 import { normalizePhone } from '@/lib/phone'
@@ -50,6 +50,7 @@ export function CheckoutForm({ payments, pickups, zones }: Props) {
   const [formError, setFormError] = useState('')
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(false)
+  const inFlight = useRef(false) // el botón se deshabilita recién en el próximo render: esto frena un doble toque inmediato
 
   if (items.length === 0 && !done) {
     return (
@@ -64,6 +65,7 @@ export function CheckoutForm({ payments, pickups, zones }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (inFlight.current) return
     setFormError('')
     const next: Record<string, string> = {}
     if (!name.trim()) next.name = 'Escribí tu nombre.'
@@ -77,6 +79,7 @@ export function CheckoutForm({ payments, pickups, zones }: Props) {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
+    inFlight.current = true
     setSending(true)
     try {
       const res = await fetch('/api/orders', {
@@ -113,6 +116,7 @@ export function CheckoutForm({ payments, pickups, zones }: Props) {
     } catch {
       setFormError('No pudimos enviar el pedido. Revisá tu conexión y probá de nuevo.')
     }
+    inFlight.current = false
     setSending(false)
   }
 
