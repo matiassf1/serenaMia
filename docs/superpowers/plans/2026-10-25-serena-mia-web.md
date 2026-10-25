@@ -36,6 +36,12 @@ Cada línea tiene su test fijado en la tarea indicada.
 5. **Mensaje `wa.me`** (tildes, `ñ`, saltos de línea, `&` en nombres de producto sobreviven a `encodeURIComponent`; el número de pedido aparece): Task 6.
 6. **Payload manipulado en checkout** (precio, total o envío enviados por el cliente se ignoran; cantidad 0, negativa o decimal se rechaza; producto inexistente o inactivo se rechaza): Task 4.
 
+## Notas de implementación acumuladas
+
+- Los ids del esquema Prisma son `Int` (autoincrement), no strings: en todas las firmas del plan `productId`, `pickupPointId`, `shippingZoneId`, `paymentMethodId`, `orderId`, `categoryId` son `number`. `setOrderStatus` sobre un pedido cancelado lanza `InvalidOrderError('order_cancelled')`. `OrderView.items` es `{productName, quantity, unitPrice}[]`.
+- E2E: `E2E_PORT=<puerto> npx playwright test` usa un servidor propio por worker (pública 3100, admin 3200). Antes de la primera corrida: `npx playwright install chromium`.
+- Postgres de desarrollo/tests: contenedor `serenamia-postgres` en el puerto 5433 (ver README.md).
+
 ## Mapa de dependencias y paralelismo
 
 ```
