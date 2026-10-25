@@ -1,0 +1,162 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { NextRequest } from 'next/server'
+import { db } from '@/lib/db'
+import {
+  createSession,
+  getAdminFromRequest,
+  hashPassword,
+  verifyPassword,
+  verifySession,
+  SESSION_COOKIE,
+} from '@/lib/auth'
+import { proxy } from '@/proxy'
+import { POST as login } from '@/app/api/admin/login/route'
+import { POST as logout } from '@/app/api/admin/logout/route'
+import { resetDb } from './helpers'
+
+const PASSWORD = 'clave-segura-123'
+let ipCounter = 0
+
+function loginReq(email: string, password: string, ip = `10.0.0.${++ipCounter}`) {
+  return new Request('http://localhost/api/admin/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+    body: JSON.stringify({ email, password }),
+  })
+}
+
+async function makeAdmin(email = 'elias@serenamia.test') {
+  return db.adminUser.create({ data: { email, passwordHash: await hashPassword(PASSWORD) } })
+}
+
+beforeEach(async () => {
+  await resetDb()
+})
+
+describe('hash de contraseñas', () => {
+  it('nunca guarda la contraseña en claro y verifica correcto/incorrecto', async () => {
+    const admin = await makeAdmin()
+    const stored = await db.adminUser.findUniqueOrThrow({ where: { id: admin.id } })
+    expect(stored.passwordHash).not.toContain(PASSWORD)
+    expect(stored.passwordHash).toMatch(/^\$2[aby]\$/)
+    expect(await verifyPassword(PASSWORD, stored.passwordHash)).toBe(true)
+    expect(await verifyPassword('otra-clave', stored.passwordHash)).toBe(false)
+  })
+})
+
+describe('sesión firmada', () => {
+  it('round-trip del token', () => {
+    expect(verifySession(createSession(42))).toBe(42)
+  })
+
+  it('rechaza token manipulado, firma ajena, basura y vencido', () => {
+    const token = createSession(1)
+    const [payload, sig] = token.split('.')
+    const forged = Buffer.from(JSON.stringify({ uid: 2, exp: Date.now() + 1e9 })).toString('base64url')
+    expect(verifySession(`${forged}.${sig}`)).toBeNull()
+    expect(verifySession(`${payload}.${sig.slice(0, -2)}AA`)).toBeNull()
+    expect(verifySession(payload)).toBeNull()
+    expect(verifySession('')).toBeNull()
+    expect(verifySession('a.b.c')).toBeNull()
+    const expired = createSession(1, Date.now() - 8 * 24 * 3600 * 1000)
+    expect(verifySession(expired)).toBeNull()
+  })
+})
+
+describe('POST /api/admin/login', () => {
+  it('contraseña correcta → 200 y cookie httpOnly sameSite=lax', async () => {
+    const admin = await makeAdmin()
+    const res = await login(loginReq(admin.email, PASSWORD))
+    expect(res.status).toBe(200)
+    const cookie = res.headers.get('set-cookie') ?? ''
+    expect(cookie).toContain(`${SESSION_COOKIE}=`)
+    expect(cookie.toLowerCase()).toContain('httponly')
+    expect(cookie.toLowerCase()).toContain('samesite=lax')
+    expect(cookie).toContain('Path=/')
+    const token = /sm_admin=([^;]+)/.exec(cookie)![1]
+    expect(verifySession(token)).toBe(admin.id)
+  })
+
+  it('contraseña incorrecta y usuario inexistente → mismo 401 y mismo body, sin cookie', async () => {
+    const admin = await makeAdmin()
+    const a = await login(loginReq(admin.email, 'mala'))
+    const b = await login(loginReq('nadie@serenamia.test', 'mala'))
+    expect(a.status).toBe(401)
+    expect(b.status).toBe(401)
+    expect(await a.text()).toBe(await b.text())
+    expect(a.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('body inválido → 400', async () => {
+    const res = await login(
+      new Request('http://localhost/api/admin/login', { method: 'POST', body: 'no-json' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('el 6.º intento fallido en la ventana → 429, incluso con la clave correcta', async () => {
+    const admin = await makeAdmin()
+    const ip = '203.0.113.9'
+    for (let i = 0; i < 5; i++) {
+      expect((await login(loginReq(admin.email, 'mala', ip))).status).toBe(401)
+    }
+    expect((await login(loginReq(admin.email, 'mala', ip))).status).toBe(429)
+    expect((await login(loginReq(admin.email, PASSWORD, ip))).status).toBe(429)
+  })
+})
+
+describe('POST /api/admin/logout', () => {
+  it('borra la cookie', async () => {
+    const res = await logout(new Request('http://localhost/api/admin/logout', { method: 'POST' }))
+    const cookie = res.headers.get('set-cookie') ?? ''
+    expect(cookie).toContain(`${SESSION_COOKIE}=;`)
+    expect(cookie.toLowerCase()).toMatch(/max-age=0|expires=/)
+  })
+})
+
+describe('getAdminFromRequest', () => {
+  it('devuelve el admin con sesión válida y null sin sesión, manipulada o de usuario borrado', async () => {
+    const admin = await makeAdmin()
+    const withCookie = (v: string) =>
+      new Request('http://localhost/x', { headers: { cookie: `a=1; ${SESSION_COOKIE}=${v}` } })
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id)))).toEqual({
+      id: admin.id,
+      email: admin.email,
+    })
+    expect(await getAdminFromRequest(new Request('http://localhost/x'))).toBeNull()
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id) + 'x'))).toBeNull()
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id + 999)))).toBeNull()
+  })
+})
+
+describe('proxy (protección de rutas)', () => {
+  const req = (path: string, token?: string) =>
+    new NextRequest(`http://localhost${path}`, {
+      headers: token ? { cookie: `${SESSION_COOKIE}=${token}` } : {},
+    })
+
+  it('sin sesión: /admin/* redirige a /admin/login y /api/admin/* da 401', async () => {
+    const page = await proxy(req('/admin/productos'))
+    expect(page.status).toBe(307)
+    expect(new URL(page.headers.get('location')!).pathname).toBe('/admin/login')
+    const api = await proxy(req('/api/admin/products'))
+    expect(api.status).toBe(401)
+  })
+
+  it('el login (página y API) queda abierto', async () => {
+    for (const p of ['/admin/login', '/api/admin/login']) {
+      const res = await proxy(req(p))
+      expect(res.headers.get('x-middleware-next')).toBe('1')
+    }
+  })
+
+  it('token manipulado se rechaza; token válido pasa', async () => {
+    const token = createSession(1)
+    const bad = await proxy(req('/admin', token.slice(0, -2) + 'AA'))
+    expect(bad.status).toBe(307)
+    const ok = await proxy(req('/admin/pedidos', token))
+    expect(ok.headers.get('x-middleware-next')).toBe('1')
+    const okApi = await proxy(req('/api/admin/products', token))
+    expect(okApi.headers.get('x-middleware-next')).toBe('1')
+  })
+})
