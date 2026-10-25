@@ -165,7 +165,10 @@ describe('versión de sesión atada a la contraseña', () => {
 
 describe('POST /api/admin/logout', () => {
   it('borra la cookie', async () => {
-    const res = await logout(new Request('http://localhost/api/admin/logout', { method: 'POST' }))
+    const res = await logout()
+    expect(res.status).toBe(303)
+    // Relativa: detrás del proxy de Railway el host de la request es interno (localhost:8080), nunca debe filtrarse.
+    expect(res.headers.get('location')).toBe('/admin/login')
     const cookie = res.headers.get('set-cookie') ?? ''
     expect(cookie).toContain(`${SESSION_COOKIE}=;`)
     expect(cookie.toLowerCase()).toMatch(/max-age=0|expires=/)
@@ -196,7 +199,7 @@ describe('proxy (protección de rutas)', () => {
   it('sin sesión: /admin/* redirige a /admin/login y /api/admin/* da 401', async () => {
     const page = await proxy(req('/admin/productos'))
     expect(page.status).toBe(307)
-    expect(new URL(page.headers.get('location')!).pathname).toBe('/admin/login')
+    expect(page.headers.get('location')).toBe('/admin/login')
     const api = await proxy(req('/api/admin/products'))
     expect(api.status).toBe(401)
   })

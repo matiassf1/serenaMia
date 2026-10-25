@@ -11,7 +11,8 @@ export function proxy(req: NextRequest) {
   if (pathname.startsWith('/api/')) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
-  return NextResponse.redirect(new URL('/admin/login', req.url))
+  // Location relativa: detrás del proxy de Railway req.url trae el host interno (localhost:8080), no el dominio público.
+  return new NextResponse(null, { status: 307, headers: { Location: '/admin/login' } })
 }
 
 export const config = { matcher: ['/admin/:path*', '/api/admin/:path*'] }
