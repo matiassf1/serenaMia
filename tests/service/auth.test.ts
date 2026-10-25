@@ -12,6 +12,7 @@ import {
 import { proxy } from '@/proxy'
 import { POST as login } from '@/app/api/admin/login/route'
 import { POST as logout } from '@/app/api/admin/logout/route'
+import { resetRateLimitsForTests } from '@/lib/rateLimit'
 import { resetDb } from './helpers'
 
 const PASSWORD = 'clave-segura-123'
@@ -30,6 +31,7 @@ async function makeAdmin(email = 'elias@serenamia.test') {
 }
 
 beforeEach(async () => {
+  resetRateLimitsForTests()
   await resetDb()
 })
 
@@ -103,6 +105,31 @@ describe('POST /api/admin/login', () => {
     expect((await login(loginReq(admin.email, 'mala', ip))).status).toBe(429)
     expect((await login(loginReq(admin.email, PASSWORD, ip))).status).toBe(429)
   })
+})
+
+describe('POST /api/admin/login (límites que no dependen de la IP)', () => {
+  it('variar el prefijo de X-Forwarded-For no esquiva el límite', async () => {
+    const admin = await makeAdmin()
+    for (let i = 0; i < 5; i++) {
+      expect((await login(loginReq(admin.email, 'mala', `9.9.9.${i}, 198.51.100.7`))).status).toBe(401)
+    }
+    expect((await login(loginReq(admin.email, 'mala', '9.9.9.99, 198.51.100.7'))).status).toBe(429)
+  })
+
+  it('tope por email: 20 fallos por hora desde IPs distintas, y después ni la clave correcta entra', async () => {
+    const admin = await makeAdmin()
+    for (let i = 0; i < 20; i++) {
+      expect((await login(loginReq(admin.email, 'mala', `198.51.100.${i + 1}`))).status).toBe(401)
+    }
+    expect((await login(loginReq(admin.email, PASSWORD, '203.0.113.200'))).status).toBe(429)
+  }, 60_000)
+
+  it('los logins correctos no consumen el tope por email', async () => {
+    const admin = await makeAdmin()
+    for (let i = 0; i < 6; i++) {
+      expect((await login(loginReq(admin.email, PASSWORD, `198.51.101.${i + 1}`))).status).toBe(200)
+    }
+  }, 60_000)
 })
 
 describe('POST /api/admin/logout', () => {

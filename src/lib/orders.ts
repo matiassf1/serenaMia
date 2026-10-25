@@ -220,6 +220,21 @@ export async function expireStaleOrders(now: Date): Promise<number> {
   return count
 }
 
+let lastLazyExpiry = 0
+const LAZY_EXPIRY_MIN_INTERVAL_MS = 60_000
+
+/** Para rutas públicas (seguimiento): como mucho una pasada por minuto. El cron y el listado del admin ya corren `expireStaleOrders`. */
+export async function expireStaleOrdersThrottled(now: Date): Promise<number> {
+  const t = now.getTime()
+  if (t - lastLazyExpiry < LAZY_EXPIRY_MIN_INTERVAL_MS) return 0
+  lastLazyExpiry = t
+  return expireStaleOrders(now)
+}
+
+export function resetExpiryThrottleForTests(): void {
+  lastLazyExpiry = 0
+}
+
 /** null idéntico si no existe el código o no coincide el teléfono (spec §7). */
 export async function findOrderForTracking(code: string, phone: string): Promise<OrderView | null> {
   const normalized = normalizePhone(phone)

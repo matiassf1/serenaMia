@@ -7,6 +7,7 @@ import { WHOLESALE_COOKIE, isWholesaleUnlocked, signWholesaleToken } from '@/lib
 import { POST as unlock } from '@/app/api/wholesale/unlock/route'
 import { POST as createOrder } from '@/app/api/orders/route'
 import { GET as cartData } from '@/app/api/cart/route'
+import { resetRateLimitsForTests } from '@/lib/rateLimit'
 import { resetDb } from './helpers'
 
 const CODE = 'Salon-2026'
@@ -50,6 +51,7 @@ async function setMode(wholesaleMode: 'PUBLIC' | 'CODE', wholesaleCode: string |
 }
 
 beforeEach(async () => {
+  resetRateLimitsForTests()
   await resetDb()
   await seed(db)
   const cat = await db.category.findFirstOrThrow()
@@ -123,6 +125,28 @@ describe('POST /api/wholesale/unlock', () => {
     expect(blocked.status).toBe(429)
     expect(blocked.headers.get('set-cookie')).toBeNull()
     expect((await unlock(unlockReq({ code: CODE }, '10.9.9.10'))).status).toBe(200)
+  })
+})
+
+describe('POST /api/wholesale/unlock (límites que no dependen de la IP)', () => {
+  it('variar el prefijo de X-Forwarded-For no esquiva el límite', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await unlock(unlockReq({ code: 'mal' }, `1.2.3.${i}, 198.51.100.7`))).status).toBe(401)
+    }
+    expect((await unlock(unlockReq({ code: 'mal' }, '1.2.3.99, 198.51.100.7'))).status).toBe(429)
+  })
+
+  it('tope global: 30 códigos incorrectos por hora desde IPs distintas y después ni el correcto entra', async () => {
+    for (let i = 0; i < 30; i++) {
+      expect((await unlock(unlockReq({ code: `mal${i}` }, `198.51.100.${i + 1}`))).status).toBe(401)
+    }
+    const blocked = await unlock(unlockReq({ code: CODE }, '203.0.113.250'))
+    expect(blocked.status).toBe(429)
+    expect(blocked.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('los desbloqueos correctos no consumen el tope global', async () => {
+    for (let i = 0; i < 10; i++) expect((await unlock(unlockReq({ code: CODE }, `198.51.101.${i + 1}`))).status).toBe(200)
   })
 })
 
