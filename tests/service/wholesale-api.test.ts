@@ -25,14 +25,17 @@ function unlockReq(body: unknown, ip = `10.1.0.${++n}`) {
 
 const cookieHeader = (code: string) => `${WHOLESALE_COOKIE}=${signWholesaleToken(code)}`
 
+// POST /api/orders limita por IP y por teléfono: cada pedido de prueba sale de una IP y un teléfono distintos.
+let orderN = 0
 function orderReq(quantity: number, cookie?: string) {
+  const k = ++orderN
   return new Request('http://localhost/api/orders', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': `10.2.${k >> 8}.${k & 255}`, ...(cookie ? { cookie } : {}) },
     body: JSON.stringify({
       items: [{ productId: ids.wholesale, quantity }],
       customerName: 'Ana Pérez',
-      phone: '381 611-6380',
+      phone: `381 611-${String(1000 + k)}`,
       deliveryType: 'PICKUP',
       pickupPointId: ids.pickup,
       paymentMethodId: ids.payment,
