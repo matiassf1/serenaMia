@@ -138,3 +138,13 @@ test('con cookie de otro pedido tampoco muestra el pedido', async ({ page, conte
   await page.goto(`/pedido/${order.code}`)
   await expect(page).toHaveURL(/\/seguimiento/)
 })
+
+test('una cookie lastOrderCode falsificada con el código a secas NO abre /pedido/[code]', async ({ page, context }) => {
+  const order = await db.order.findFirstOrThrow({ where: { phone: '3816119999' }, orderBy: { id: 'desc' } })
+  const base = 'http://localhost:' + (process.env.E2E_PORT ?? '3000')
+  await context.addCookies([{ name: 'lastOrderCode', value: order.code, url: base }])
+  await page.goto(`/pedido/${order.code}`)
+  await expect(page).toHaveURL(/\/seguimiento/)
+  await expect(page.getByRole('link', { name: 'Enviar pedido por WhatsApp' })).toHaveCount(0)
+  await expect(page.locator('body')).not.toContainText('Calle Falsa')
+})

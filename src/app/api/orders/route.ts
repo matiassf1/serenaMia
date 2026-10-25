@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { InvalidOrderError, OutOfStockError, placeOrder } from '@/lib/orders'
 import { loadOrderConfirmation } from '@/lib/orderWhatsApp'
+import { LAST_ORDER_COOKIE, ORDER_ACCESS_MAX_AGE_S, signOrderAccess } from '@/lib/orderAccess'
 import { getWholesaleAccessForRequest } from '@/lib/wholesale'
-
-export const LAST_ORDER_COOKIE = 'lastOrderCode'
 
 type Body = Record<string, unknown>
 
@@ -35,13 +34,13 @@ export async function POST(req: Request) {
       { code: placed.code, total: placed.total, whatsappUrl: confirmation?.whatsappUrl ?? null },
       { status: 201 },
     )
-    // Quien hizo el pedido puede ver /pedido/[code] por un rato; el código solo no da acceso (spec §7).
-    res.cookies.set(LAST_ORDER_COOKIE, placed.code, {
+    // Quien hizo el pedido puede ver /pedido/[code] por un rato; la cookie va firmada, el código solo no da acceso (spec §7).
+    res.cookies.set(LAST_ORDER_COOKIE, signOrderAccess(placed.code), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 2 * 60 * 60,
+      maxAge: ORDER_ACCESS_MAX_AGE_S,
     })
     return res
   } catch (e) {

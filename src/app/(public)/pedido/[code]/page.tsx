@@ -1,18 +1,21 @@
 import { Suspense } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { connection } from 'next/server'
 import Link from 'next/link'
 import { formatPrice } from '@/lib/money'
+import { LAST_ORDER_COOKIE, verifyOrderAccess } from '@/lib/orderAccess'
 import { loadOrderConfirmation } from '@/lib/orderWhatsApp'
 
 export const metadata = { title: 'Tu pedido · Serena Mia', robots: { index: false } }
 
-// El código solo no da acceso (spec §7): hace falta la cookie de corta vida que puso POST /api/orders.
+// El código solo no da acceso (spec §7): hace falta la cookie FIRMADA y de corta vida que puso POST /api/orders.
 async function Confirmation({ params }: Pick<PageProps<'/pedido/[code]'>, 'params'>) {
   const { code } = await params
-  const last = (await cookies()).get('lastOrderCode')?.value
-  if (!last || last.toUpperCase() !== code.toUpperCase()) redirect('/seguimiento')
-  const data = await loadOrderConfirmation({ code: last.toUpperCase() })
+  const token = (await cookies()).get(LAST_ORDER_COOKIE)?.value
+  await connection() // verifyOrderAccess usa Date.now(): obliga a renderizar en cada request (cacheComponents)
+  if (!verifyOrderAccess(token, code)) redirect('/seguimiento')
+  const data = await loadOrderConfirmation({ code: code.toUpperCase() })
   if (!data) redirect('/seguimiento')
   const { order, deliveryLabel, whatsappUrl } = data
 

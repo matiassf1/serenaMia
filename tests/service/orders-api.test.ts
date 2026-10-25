@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/lib/db'
 import { seed } from '../../prisma/seed'
 import { POST } from '@/app/api/orders/route'
+import { verifyOrderAccess } from '@/lib/orderAccess'
+import { resetRateLimitsForTests } from '@/lib/rateLimit'
 import { resetDb } from './helpers'
 
 let ids: { product: number; wholesale: number; outOfStock: number; inactive: number; payment: number; pickup: number; zone: number }
@@ -27,6 +29,7 @@ function valid(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
+  resetRateLimitsForTests()
   await resetDb()
   await seed(db)
   const cat = await db.category.findFirstOrThrow()
@@ -60,6 +63,11 @@ describe('POST /api/orders', () => {
     expect(decodeURIComponent(body.whatsappUrl)).toContain(body.code)
     const cookie = res.headers.get('set-cookie') ?? ''
     expect(cookie).toContain(`lastOrderCode=${body.code}`)
+    // La cookie va firmada: el código a secas no habilita /pedido/[code].
+    const value = /lastOrderCode=([^;]+)/.exec(cookie)![1]
+    expect(value).not.toBe(body.code)
+    expect(verifyOrderAccess(value, body.code)).toBe(true)
+    expect(verifyOrderAccess(body.code, body.code)).toBe(false)
     expect(cookie.toLowerCase()).toContain('httponly')
     expect(cookie.toLowerCase()).toContain('samesite=lax')
     expect(cookie).toContain('Max-Age=7200')
