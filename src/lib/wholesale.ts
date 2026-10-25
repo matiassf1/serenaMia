@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
+import { getSessionSecret } from '@/lib/secrets'
 
 export const WHOLESALE_COOKIE = 'sm_wholesale'
 export const WHOLESALE_MAX_AGE_S = 60 * 60 * 24 * 30
@@ -8,9 +9,7 @@ export const WHOLESALE_MAX_AGE_S = 60 * 60 * 24 * 30
 export type WholesaleMode = 'PUBLIC' | 'CODE'
 
 function sign(code: string): string {
-  const secret = process.env.SESSION_SECRET
-  if (!secret) throw new Error('SESSION_SECRET no está definida')
-  return createHmac('sha256', secret).update(`wholesale:${code}`).digest('base64url')
+  return createHmac('sha256', getSessionSecret()).update(`wholesale:${code}`).digest('base64url')
 }
 
 /** Valor de la cookie: firma del código vigente. No lleva el código; cambiarlo en el admin invalida todas las cookies. */

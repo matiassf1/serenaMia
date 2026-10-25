@@ -303,7 +303,7 @@ describe('GET /api/uploads/[...path]', () => {
 describe('rutas admin', () => {
   async function authedCookie() {
     const admin = await db.adminUser.create({ data: { email: ADMIN, passwordHash: await hashPassword('x') } })
-    return `${SESSION_COOKIE}=${createSession(admin.id)}`
+    return `${SESSION_COOKIE}=${createSession(admin.id, admin.passwordHash)}`
   }
 
   it('sin sesión: 401 en productos y bulk-price', async () => {

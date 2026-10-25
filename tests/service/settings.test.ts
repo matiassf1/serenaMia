@@ -251,7 +251,7 @@ describe('rutas /api/admin', () => {
 
   async function adminCookie() {
     const admin = await db.adminUser.create({ data: { email: ADMIN, passwordHash: 'x' } })
-    return `${SESSION_COOKIE}=${await createSession(admin.id)}`
+    return `${SESSION_COOKIE}=${createSession(admin.id, admin.passwordHash)}`
   }
 
   it('sin sesión: 401 en todas', async () => {

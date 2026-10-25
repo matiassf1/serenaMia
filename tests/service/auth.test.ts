@@ -48,11 +48,11 @@ describe('hash de contraseñas', () => {
 
 describe('sesión firmada', () => {
   it('round-trip del token', () => {
-    expect(verifySession(createSession(42))).toBe(42)
+    expect(verifySession(createSession(42, 'hash-a'))).toBe(42)
   })
 
   it('rechaza token manipulado, firma ajena, basura y vencido', () => {
-    const token = createSession(1)
+    const token = createSession(1, 'hash-a')
     const [payload, sig] = token.split('.')
     const forged = Buffer.from(JSON.stringify({ uid: 2, exp: Date.now() + 1e9 })).toString('base64url')
     expect(verifySession(`${forged}.${sig}`)).toBeNull()
@@ -60,7 +60,7 @@ describe('sesión firmada', () => {
     expect(verifySession(payload)).toBeNull()
     expect(verifySession('')).toBeNull()
     expect(verifySession('a.b.c')).toBeNull()
-    const expired = createSession(1, Date.now() - 8 * 24 * 3600 * 1000)
+    const expired = createSession(1, 'hash-a', Date.now() - 8 * 24 * 3600 * 1000)
     expect(verifySession(expired)).toBeNull()
   })
 })
@@ -132,6 +132,37 @@ describe('POST /api/admin/login (límites que no dependen de la IP)', () => {
   }, 60_000)
 })
 
+describe('versión de sesión atada a la contraseña', () => {
+  const withCookie = (v: string) => new Request('http://localhost/x', { headers: { cookie: `${SESSION_COOKIE}=${v}` } })
+
+  it('cambiar la contraseña invalida las sesiones ya emitidas', async () => {
+    const admin = await makeAdmin()
+    const token = createSession(admin.id, admin.passwordHash)
+    expect(await getAdminFromRequest(withCookie(token))).toMatchObject({ id: admin.id })
+    await db.adminUser.update({ where: { id: admin.id }, data: { passwordHash: await hashPassword('otra-clave-nueva') } })
+    expect(await getAdminFromRequest(withCookie(token))).toBeNull()
+    const fresh = await db.adminUser.findUniqueOrThrow({ where: { id: admin.id } })
+    expect(await getAdminFromRequest(withCookie(createSession(fresh.id, fresh.passwordHash)))).toMatchObject({ id: admin.id })
+  })
+
+  it('una sesión sin versión (formato viejo) o con la versión de otra contraseña no entra', async () => {
+    const admin = await makeAdmin()
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id, 'otra-contraseña')))).toBeNull()
+    const secret = process.env.SESSION_SECRET!
+    const { createHmac } = await import('node:crypto')
+    const payload = Buffer.from(JSON.stringify({ uid: admin.id, exp: Date.now() + 1e6 })).toString('base64url')
+    const legacy = `${payload}.${createHmac('sha256', secret).update(payload).digest('base64url')}`
+    expect(await getAdminFromRequest(withCookie(legacy))).toBeNull()
+  })
+
+  it('el login emite una sesión que sirve con la contraseña actual', async () => {
+    const admin = await makeAdmin()
+    const res = await login(loginReq(admin.email, PASSWORD))
+    const token = /sm_admin=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1]
+    expect(await getAdminFromRequest(withCookie(token))).toMatchObject({ id: admin.id })
+  })
+})
+
 describe('POST /api/admin/logout', () => {
   it('borra la cookie', async () => {
     const res = await logout(new Request('http://localhost/api/admin/logout', { method: 'POST' }))
@@ -146,13 +177,13 @@ describe('getAdminFromRequest', () => {
     const admin = await makeAdmin()
     const withCookie = (v: string) =>
       new Request('http://localhost/x', { headers: { cookie: `a=1; ${SESSION_COOKIE}=${v}` } })
-    expect(await getAdminFromRequest(withCookie(createSession(admin.id)))).toEqual({
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id, admin.passwordHash)))).toEqual({
       id: admin.id,
       email: admin.email,
     })
     expect(await getAdminFromRequest(new Request('http://localhost/x'))).toBeNull()
-    expect(await getAdminFromRequest(withCookie(createSession(admin.id) + 'x'))).toBeNull()
-    expect(await getAdminFromRequest(withCookie(createSession(admin.id + 999)))).toBeNull()
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id, admin.passwordHash) + 'x'))).toBeNull()
+    expect(await getAdminFromRequest(withCookie(createSession(admin.id + 999, admin.passwordHash)))).toBeNull()
   })
 })
 
@@ -178,7 +209,7 @@ describe('proxy (protección de rutas)', () => {
   })
 
   it('token manipulado se rechaza; token válido pasa', async () => {
-    const token = createSession(1)
+    const token = createSession(1, 'hash-a')
     const bad = await proxy(req('/admin', token.slice(0, -2) + 'AA'))
     expect(bad.status).toBe(307)
     const ok = await proxy(req('/admin/pedidos', token))

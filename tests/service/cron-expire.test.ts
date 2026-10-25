@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/lib/db'
 import { seed } from '../../prisma/seed'
 import { placeOrder } from '@/lib/orders'
@@ -82,5 +82,25 @@ describe('POST /api/cron/expire', () => {
     expect(second.status).toBe(200)
     expect(await second.json()).toEqual({ expired: 0 })
     expect((await db.product.findUniqueOrThrow({ where: { id: productId } })).stock).toBe(10)
+  })
+})
+
+describe('POST /api/cron/expire con un secreto débil en producción', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('no autoriza ni con el secreto correcto si es débil o el placeholder (401, no expira nada)', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    for (const weak of ['corta', 'change-me-to-another-random-string']) {
+      vi.stubEnv('CRON_SECRET', weak)
+      expect((await POST(req(`Bearer ${weak}`))).status).toBe(401)
+    }
+    expect(await db.order.count({ where: { status: 'CANCELLED' } })).toBe(0)
+  })
+
+  it('con un secreto fuerte en producción sí autoriza', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const strong = 'z'.repeat(40)
+    vi.stubEnv('CRON_SECRET', strong)
+    expect((await POST(req(`Bearer ${strong}`))).status).toBe(200)
   })
 })

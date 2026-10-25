@@ -25,7 +25,7 @@ async function newOrder(over: { phone?: string; quantity?: number } = {}) {
 
 async function act(id: number, body: unknown, withSession = true) {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
-  if (withSession) headers.cookie = `${SESSION_COOKIE}=${createSession(adminId)}`
+  if (withSession) headers.cookie = `${SESSION_COOKIE}=${createSession(adminId, 'x')}`
   const req = new Request(`http://localhost/api/admin/orders/${id}`, { method: 'POST', headers, body: JSON.stringify(body) })
   return POST(req, { params: Promise.resolve({ id: String(id) }) })
 }

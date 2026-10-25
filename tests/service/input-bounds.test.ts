@@ -16,7 +16,7 @@ let productId: number
 beforeEach(async () => {
   await resetDb()
   const admin = await db.adminUser.create({ data: { email: 'elias@serenamia.test', passwordHash: 'x' } })
-  cookie = `${SESSION_COOKIE}=${createSession(admin.id)}`
+  cookie = `${SESSION_COOKIE}=${createSession(admin.id, admin.passwordHash)}`
   categoryId = (await db.category.create({ data: { name: 'Insumos', slug: 'insumos' } })).id
   productId = (await db.product.create({ data: { name: 'Base', slug: 'base', categoryId, retailPrice: 150000, stock: 5 } })).id
 })

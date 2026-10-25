@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(SESSION_COOKIE, createSession(user.id), {
+  res.cookies.set(SESSION_COOKIE, createSession(user.id, user.passwordHash), {
     ...sessionCookieOptions,
     maxAge: SESSION_MAX_AGE_S,
   })

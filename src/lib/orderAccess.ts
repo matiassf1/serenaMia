@@ -1,12 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { getSessionSecret } from '@/lib/secrets'
 
 export const LAST_ORDER_COOKIE = 'lastOrderCode'
 export const ORDER_ACCESS_MAX_AGE_S = 2 * 60 * 60
 
 function sign(code: string, exp: number): string {
-  const secret = process.env.SESSION_SECRET
-  if (!secret) throw new Error('SESSION_SECRET no está definida')
-  return createHmac('sha256', secret).update(`order:${code}:${exp}`).digest('base64url')
+  return createHmac('sha256', getSessionSecret()).update(`order:${code}:${exp}`).digest('base64url')
 }
 
 /**
