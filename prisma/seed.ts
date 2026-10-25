@@ -107,11 +107,23 @@ export async function seed(db: PrismaClient) {
   }
 }
 
+// Crea el primer admin desde ADMIN_EMAIL / ADMIN_PASSWORD solo si todavía no existe ninguno (arranque de producción).
+export async function ensureFirstAdmin(db: PrismaClient) {
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase()
+  const password = process.env.ADMIN_PASSWORD
+  if (!email || !password || (await db.adminUser.count()) > 0) return
+  if (password.length < 8) throw new Error('ADMIN_PASSWORD debe tener al menos 8 caracteres')
+  const { hashPassword } = await import('../src/lib/auth')
+  await db.adminUser.create({ data: { email, passwordHash: await hashPassword(password) } })
+  console.log(`Primer admin creado: ${email}`)
+}
+
 // Solo corre al ejecutarse directamente (tsx prisma/seed.ts), no al importarlo desde tests.
 if (process.argv[1]?.endsWith('seed.ts') && !process.env.VITEST) {
   config()
   const db = new PrismaClient()
   seed(db)
+    .then(() => ensureFirstAdmin(db))
     .then(() => console.log('Seed OK'))
     .catch((e) => {
       console.error(e)
