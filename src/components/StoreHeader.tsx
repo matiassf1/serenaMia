@@ -3,6 +3,7 @@ import { connection } from 'next/server'
 import type { BusinessHours } from '@prisma/client'
 import { db } from '@/lib/db'
 import { getOpenStatus } from '@/lib/hours'
+import { mapsHref } from '@/lib/maps'
 import { whatsappDigits } from '@/lib/whatsapp'
 
 const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -84,7 +85,7 @@ export async function StoreHeader() {
           </p>
           <div className="grid grid-cols-2 gap-3">
             <a
-              href={settings.mapsUrl}
+              href={mapsHref(settings.mapsUrl, settings.address)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex min-h-12 items-center justify-center rounded-full bg-brand-deep px-4 text-base font-semibold text-white active:bg-brand-ink"
