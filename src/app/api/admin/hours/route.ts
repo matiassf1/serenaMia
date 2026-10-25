@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { dbId } from '@/lib/bounds'
 import { adminJson } from '@/lib/settingsApi'
 import { addHoursException, removeHoursException, replaceWeeklyHours } from '@/lib/settings'
 
@@ -17,7 +18,7 @@ const Exception = z.object({
   closesAt: z.string().nullish(),
   note: z.string(),
 })
-const Remove = z.object({ id: z.number().int() })
+const Remove = z.object({ id: dbId })
 
 /** Reemplaza el horario semanal completo. */
 export const PUT = (req: Request) => adminJson(req, Week, async (b, admin) => void (await replaceWeeklyHours(b.days, admin.email)))

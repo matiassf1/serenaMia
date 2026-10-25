@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminFromRequest } from '@/lib/auth'
+import { dbId } from '@/lib/bounds'
 import { ProductValidationError, bulkAdjustPrices, previewBulkPrices } from '@/lib/products'
 
 const Body = z.object({
-  categoryId: z.number().int().nullable(),
-  percent: z.number(),
+  categoryId: dbId.nullable(),
+  percent: z.number().gt(-100).max(1000),
   apply: z.boolean().optional(),
 })
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminFromRequest } from '@/lib/auth'
+import { parseDbId } from '@/lib/bounds'
 import { db } from '@/lib/db'
 import { STATUSES } from '@/lib/adminOrders'
 import { InvalidOrderError, cancelOrder, extendExpiry, markOrderSeen, setOrderStatus, setPaymentStatus } from '@/lib/orders'
@@ -18,8 +19,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const admin = await getAdminFromRequest(req)
   if (!admin) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   const { id: raw } = await params
-  if (!/^\d+$/.test(raw)) return NextResponse.json({ error: 'El pedido no existe.' }, { status: 404 })
-  const id = Number(raw)
+  const id = parseDbId(raw)
+  if (id === null) return NextResponse.json({ error: 'El pedido no existe.' }, { status: 404 })
   const parsed = Body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
   const body = parsed.data

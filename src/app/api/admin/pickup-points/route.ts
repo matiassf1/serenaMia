@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { dbId } from '@/lib/bounds'
 import { adminJson } from '@/lib/settingsApi'
 import { deletePickupPoint, savePickupPoint, setPickupPointActive } from '@/lib/settings'
 
-const Save = z.object({ id: z.number().int().optional(), name: z.string(), address: z.string() })
-const Toggle = z.object({ id: z.number().int(), active: z.boolean() })
-const Remove = z.object({ id: z.number().int() })
+const Save = z.object({ id: dbId.optional(), name: z.string(), address: z.string() })
+const Toggle = z.object({ id: dbId, active: z.boolean() })
+const Remove = z.object({ id: dbId })
 
 /** Crea (sin `id`) o edita (con `id`) un punto de retiro. */
 export const POST = (req: Request) =>

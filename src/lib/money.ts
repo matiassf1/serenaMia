@@ -1,3 +1,5 @@
+import { MAX_PRICE_CENTS } from '@/lib/bounds'
+
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })
 
 export function formatARS(centavos: number): string {
@@ -11,7 +13,7 @@ export function formatPrice(centavos: number): string {
   return centavos % 100 === 0 ? arsWhole.format(centavos / 100) : formatARS(centavos)
 }
 
-/** Acepta `1.234,50`, `1234,5`, `1234.5` y `$ 1.234`. Devuelve centavos enteros o null. */
+/** Acepta `1.234,50`, `1234,5`, `1234.5` y `$ 1.234`. Devuelve centavos enteros o null (también si pasa de $ 10.000.000). */
 export function parseARSToCentavos(input: string): number | null {
   let s = input.replace(/[\s$]/g, '')
   if (!/^\d[\d.,]*$/.test(s)) return null
@@ -34,5 +36,6 @@ export function parseARSToCentavos(input: string): number | null {
     }
   }
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null
-  return Math.round(parseFloat(s) * 100)
+  const cents = Math.round(parseFloat(s) * 100)
+  return cents > MAX_PRICE_CENTS ? null : cents
 }

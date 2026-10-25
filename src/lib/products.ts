@@ -1,6 +1,7 @@
 import type { Product } from '@prisma/client'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
+import { DB_INT_MAX, MAX_PRICE_CENTS, MAX_STOCK } from '@/lib/bounds'
 import { parseARSToCentavos } from '@/lib/money'
 
 export class ProductValidationError extends Error {
@@ -64,6 +65,7 @@ function isBlank(v: string | null | undefined): boolean {
 
 function nonNegInt(v: unknown, label: string, field: string): number {
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) fail(`${label} tiene que ser un número entero, 0 o más.`, field)
+  if ((v as number) > MAX_STOCK) fail(`${label} no puede pasar de ${MAX_STOCK.toLocaleString('es-AR')}.`, field)
   return v as number
 }
 
@@ -71,7 +73,7 @@ function validate(input: ProductInput) {
   const name = (input.name ?? '').trim()
   if (!name) fail('Escribí el nombre del producto.', 'name')
   if (name.length > 120) fail('El nombre es demasiado largo.', 'name')
-  if (!Number.isInteger(input.categoryId)) fail('Elegí una categoría.', 'categoryId')
+  if (!Number.isInteger(input.categoryId) || input.categoryId < 1 || input.categoryId > DB_INT_MAX) fail('Elegí una categoría.', 'categoryId')
   const retailPrice = parseARSToCentavos(input.retailPrice ?? '')
   if (retailPrice === null || retailPrice <= 0) fail('El precio no es válido. Ejemplo: 1.500,00', 'retailPrice')
   let wholesalePrice: number | null = null
@@ -85,7 +87,7 @@ function validate(input: ProductInput) {
     wholesalePrice = parseARSToCentavos(input.wholesalePrice as string)
     if (wholesalePrice === null || wholesalePrice <= 0) fail('El precio mayorista no es válido.', 'wholesalePrice')
     const q = input.wholesaleMinQty
-    if (typeof q !== 'number' || !Number.isInteger(q) || q < 2) fail('La cantidad mínima mayorista tiene que ser 2 o más.', 'wholesaleMinQty')
+    if (typeof q !== 'number' || !Number.isInteger(q) || q < 2 || q > MAX_STOCK) fail(`La cantidad mínima mayorista tiene que ser un número entre 2 y ${MAX_STOCK.toLocaleString('es-AR')}.`, 'wholesaleMinQty')
     wholesaleMinQty = q as number
   }
   return {
@@ -130,6 +132,7 @@ export async function saveProduct(input: ProductInput, adminEmail: string): Prom
     return created
   }
 
+  if (!Number.isInteger(input.id) || input.id < 1 || input.id > DB_INT_MAX) fail('El producto no existe.')
   const current = await db.product.findUnique({ where: { id: input.id } })
   if (!current) fail('El producto no existe.')
   const cur = current as Product
@@ -149,11 +152,14 @@ export async function saveProduct(input: ProductInput, adminEmail: string): Prom
 
 /** Suma o resta unidades. Nunca deja el stock en negativo (chequeo atómico en la base). */
 export async function adjustStock(productId: number, delta: number, reason: string, adminEmail: string): Promise<Product> {
-  if (!Number.isInteger(delta) || delta === 0) fail('El cambio de stock tiene que ser un entero distinto de 0.')
+  if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > MAX_STOCK) {
+    fail(`El cambio de stock tiene que ser un entero distinto de 0, hasta ${MAX_STOCK.toLocaleString('es-AR')}.`)
+  }
+  if (!Number.isInteger(productId) || productId < 1 || productId > DB_INT_MAX) fail('El producto no existe.')
   const rows = await db.$transaction(async (tx) => {
     const r = await tx.$queryRaw<{ stock: number }[]>`
       UPDATE "Product" SET stock = stock + ${delta}
-      WHERE id = ${productId} AND stock + ${delta} >= 0
+      WHERE id = ${productId} AND stock + ${delta} >= 0 AND stock + ${delta} <= ${MAX_STOCK}
       RETURNING stock`
     if (r.length === 0) return null
     await tx.stockLog.create({ data: { productId, delta, reason } })
@@ -162,6 +168,8 @@ export async function adjustStock(productId: number, delta: number, reason: stri
   if (!rows) {
     const exists = await db.product.findUnique({ where: { id: productId }, select: { id: true } })
     if (!exists) fail('El producto no existe.')
+    const cur = await db.product.findUniqueOrThrow({ where: { id: productId }, select: { stock: true } })
+    if (cur.stock + delta > MAX_STOCK) fail(`El stock no puede pasar de ${MAX_STOCK.toLocaleString('es-AR')}.`, 'stock')
     fail('No alcanza el stock: quedaría en negativo.', 'stock')
   }
   const stockAfter = (rows as { stock: number }[])[0].stock
@@ -184,7 +192,11 @@ function checkPercent(percent: number) {
   }
 }
 
-const scale = (cents: number, percent: number) => Math.max(1, Math.round((cents * (100 + percent)) / 100))
+const scale = (cents: number, percent: number) => {
+  const scaled = Math.max(1, Math.round((cents * (100 + percent)) / 100))
+  if (scaled > MAX_PRICE_CENTS) fail('Con ese porcentaje algún precio pasaría de $ 10.000.000. Probá con un porcentaje menor.', 'percent')
+  return scaled
+}
 
 function previewRows(
   products: Pick<Product, 'id' | 'name' | 'retailPrice' | 'wholesalePrice'>[],

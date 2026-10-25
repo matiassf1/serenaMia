@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminFromRequest } from '@/lib/auth'
+import { MAX_STOCK, dbId, parseDbId } from '@/lib/bounds'
 import { db } from '@/lib/db'
 import { ProductValidationError, adjustStock, saveProduct } from '@/lib/products'
 import { UploadError, saveUpload } from '@/lib/uploads'
@@ -28,12 +29,14 @@ export async function POST(req: Request) {
   if (!form) return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
   try {
     const idRaw = text(form, 'id')
+    const id = idRaw ? parseDbId(idRaw) : undefined
+    if (id === null) return NextResponse.json({ error: 'El producto no existe.', field: 'id' }, { status: 400 })
     const image = form.get('image')
     const imagePath = image instanceof File && image.size > 0 ? await saveUpload(image) : text(form, 'removeImage') === 'on' ? null : undefined
     const qty = text(form, 'wholesaleMinQty')
     const product = await saveProduct(
       {
-        id: idRaw ? Number(idRaw) : undefined,
+        id,
         name: text(form, 'name'),
         description: text(form, 'description'),
         categoryId: intOrNaN(text(form, 'categoryId')),
@@ -55,8 +58,8 @@ export async function POST(req: Request) {
 }
 
 const Patch = z.union([
-  z.object({ id: z.number().int(), delta: z.number().int().refine((n) => n !== 0) }),
-  z.object({ id: z.number().int(), soldOut: z.literal(true) }),
+  z.object({ id: dbId, delta: z.number().int().min(-MAX_STOCK).max(MAX_STOCK).refine((n) => n !== 0) }),
+  z.object({ id: dbId, soldOut: z.literal(true) }),
 ])
 
 /** Ajustes rápidos de stock: `+1/−1` (delta) o "Sin stock" (soldOut). */

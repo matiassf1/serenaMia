@@ -1,5 +1,6 @@
 import { Prisma, type OrderStatus, type PaymentStatus } from '@prisma/client'
 import { z } from 'zod'
+import { dbId } from '@/lib/bounds'
 import { db } from '@/lib/db'
 import { generateOrderCode } from '@/lib/orderCode'
 import { normalizePhone } from '@/lib/phone'
@@ -44,10 +45,8 @@ export type OrderView = {
 }
 
 // Topes de cordura: Postgres Int es de 32 bits; un pedido tiene pocos renglones y cantidades razonables.
-const DB_INT_MAX = 2_147_483_647
 export const MAX_ORDER_LINES = 30
 export const MAX_LINE_QUANTITY = 999
-const dbId = z.number().int().min(1).max(DB_INT_MAX)
 
 // Solo estos campos se leen del cliente: zod descarta cualquier precio, total o costo de envío extra.
 const placeOrderSchema = z.object({

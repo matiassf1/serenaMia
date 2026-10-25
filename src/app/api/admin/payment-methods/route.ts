@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { dbId } from '@/lib/bounds'
 import { adminJson } from '@/lib/settingsApi'
 import { deletePaymentMethod, savePaymentMethod, setPaymentMethodActive } from '@/lib/settings'
 
-const Save = z.object({ id: z.number().int().optional(), name: z.string(), instructions: z.string() })
-const Toggle = z.object({ id: z.number().int(), active: z.boolean() })
-const Remove = z.object({ id: z.number().int() })
+const Save = z.object({ id: dbId.optional(), name: z.string(), instructions: z.string() })
+const Toggle = z.object({ id: dbId, active: z.boolean() })
+const Remove = z.object({ id: dbId })
 
 /** Crea (sin `id`) o edita (con `id`) un medio de pago. */
 export const POST = (req: Request) =>
