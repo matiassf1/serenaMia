@@ -62,3 +62,36 @@ curl https://<dominio>.up.railway.app/api/health
 ```
 
 Si la base no responde devuelve `503 {"ok":false,"db":false}` y Railway marca el deploy como fallido. Después correr una vez el seed si se quiere el catálogo de ejemplo: `railway run npm run db:seed` (requiere CLI) o desde una shell del servicio.
+
+## 7. Checklist de lanzamiento (pasos humanos)
+
+Lo siguiente no lo hace el código: requiere la cuenta de Railway (Matías) y los datos reales (Elías). Marcar a medida que se completa.
+
+### Matías — Railway
+
+- [ ] Repo pusheado a la rama que despliega Railway (ver paso 0).
+- [ ] Proyecto + servicio web creados desde GitHub (paso 1).
+- [ ] Postgres agregado y `DATABASE_URL` referenciada (paso 2).
+- [ ] Volume montado en `/data/uploads` **en el servicio web** (paso 3).
+- [ ] Variables cargadas: `DATABASE_URL`, `SESSION_SECRET`, `CRON_SECRET`, `UPLOAD_DIR` (paso 4).
+- [ ] Primer deploy en verde y `curl https://<dominio>/api/health` → `{"ok":true,"db":true}` (paso 6).
+- [ ] Cron diario creado y probado: sin header `401`, con header `{"expired":N}` (paso 5).
+- [ ] Admin de Elías creado desde una shell del servicio: `npm run admin:create -- <email> "<clave>"`. Pasarle la clave por un canal privado.
+- [ ] Dominio propio (opcional) apuntado al servicio.
+
+### Elías — datos reales
+
+El seed (`npm run db:seed`) carga productos de ejemplo ("Producto de ejemplo 1…6"). **No correrlo en producción tal cual** si ya hay datos reales; el panel permite borrar o desactivar los de ejemplo.
+
+- [ ] Datos del local en Ajustes → Local: nombre, frase, dirección, WhatsApp (con código de país, ej. `+54 9 381 …`), Instagram y link de Google Maps. El seed trae valores de ejemplo (alias `SERENA.MIA.EJEMPLO`, titular "completar en el panel").
+- [ ] Horarios y feriados en Ajustes → Horarios.
+- [ ] Medios de pago reales (alias/CBU y titular de la transferencia) en Ajustes → Pagos.
+- [ ] Punto de retiro y zonas de envío con sus costos reales en Ajustes → Entregas.
+- [ ] Código y condiciones mayoristas en Ajustes → Mayorista (modo "Todos" o "Solo con código").
+- [ ] Productos reales: nombre, categoría, precio minorista y mayorista (con cantidad mínima), stock y foto. Desactivar o borrar los productos de ejemplo.
+- [ ] Revisar que el logo (`public/logo.png`) sea el definitivo.
+
+### Verificación final
+
+- [ ] Repetir el recorrido a mano en un celular real contra la URL de Railway: ver el local → agregar producto → checkout retiro + efectivo → ver el código → `/seguimiento` con el teléfono en otro formato → entrar al admin → el pedido aparece como nuevo → marcar pagado y "Listo" → el seguimiento muestra "Listo". (El mismo recorrido está automatizado en `tests/e2e/smoke.spec.ts` para desarrollo.)
+- [ ] Hacer un pedido de prueba y cancelarlo desde el admin para devolver el stock.

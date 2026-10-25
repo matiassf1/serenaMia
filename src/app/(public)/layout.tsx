@@ -9,8 +9,6 @@ export default function PublicLayout({ children }: LayoutProps<'/'>) {
     <CartProvider>
       <Suspense fallback={<StoreHeaderSkeleton />}>
         <StoreHeader />
-      </Suspense>
-      <Suspense fallback={null}>
         <WholesaleBanner />
       </Suspense>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 pt-5">{children}</main>

@@ -25,7 +25,7 @@ export default function AdminNav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={`flex min-h-14 items-center justify-center px-4 text-sm font-semibold md:justify-start md:px-6 ${
-                  active ? 'bg-[#FDECF5] text-[#C2398C]' : 'text-[#4A3A52]'
+                  active ? 'bg-[#FDECF5] text-[#A92E78]' : 'text-[#4A3A52]'
                 }`}
               >
                 {label}

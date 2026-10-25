@@ -32,7 +32,7 @@ export function formatSchedule(rows: BusinessHours[]): string {
 }
 
 export function StoreHeaderSkeleton() {
-  return <div aria-hidden className="h-[22rem] bg-blush" />
+  return <div aria-hidden className="h-[25.4rem] bg-blush sm:h-[15rem]" />
 }
 
 export async function StoreHeader() {

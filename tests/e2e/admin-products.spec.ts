@@ -73,7 +73,7 @@ test('crear con foto, ver alerta de stock bajo, dejar sin stock y verlo en el si
   const targets = [
     page.getByRole('button', { name: `Restar 1 a ${NAME}` }),
     page.getByRole('button', { name: `Sumar 1 a ${NAME}` }),
-    page.getByRole('button', { name: `Marcar ${NAME} sin stock` }),
+    page.getByRole('button', { name: `Marcar sin stock ${NAME}` }),
     page.getByRole('link', { name: `Editar ${NAME}` }),
   ]
   for (const [i, target] of targets.entries()) {
@@ -90,10 +90,10 @@ test('crear con foto, ver alerta de stock bajo, dejar sin stock y verlo en el si
   await expect(card.locator('[aria-live=polite]')).toHaveText('2')
 
   // "Sin stock" pide confirmación.
-  await card.getByRole('button', { name: `Marcar ${NAME} sin stock` }).click()
+  await card.getByRole('button', { name: `Marcar sin stock ${NAME}` }).click()
   await card.getByRole('button', { name: 'No' }).click()
   await expect(card.locator('[aria-live=polite]')).toHaveText('2')
-  await card.getByRole('button', { name: `Marcar ${NAME} sin stock` }).click()
+  await card.getByRole('button', { name: `Marcar sin stock ${NAME}` }).click()
   await card.getByRole('button', { name: 'Sí, sin stock' }).click()
   await expect(card.locator('[aria-live=polite]')).toHaveText('0')
   await expect(card.getByText('Sin stock', { exact: true })).toBeVisible()

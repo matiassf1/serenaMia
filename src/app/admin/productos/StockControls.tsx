@@ -53,8 +53,8 @@ export default function StockControls({ id, name, stock }: { id: number; name: s
               </button>
             </span>
           ) : (
-            <button type="button" className={`${btn} ml-auto`} disabled={busy} aria-label={`Marcar ${name} sin stock`} onClick={() => setConfirming(true)}>
-              Sin stock
+            <button type="button" className={`${btn} ml-auto`} disabled={busy} aria-label={`Marcar sin stock ${name}`} onClick={() => setConfirming(true)}>
+              Marcar sin stock
             </button>
           ))}
       </div>
