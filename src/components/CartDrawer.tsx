@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRef } from 'react'
 import { formatPrice } from '@/lib/money'
 import { MAX_QTY } from '@/lib/cart'
-import { useCart, useCartProducts } from './CartProvider'
+import { cartUnitPrice, useCart, useCartProducts } from './CartProvider'
 
 const stepBtn =
   'flex size-11 items-center justify-center rounded-full border-2 border-brand-deep bg-white text-xl font-bold text-brand-ink active:bg-blush disabled:border-gray-300 disabled:text-gray-600'
@@ -59,13 +59,24 @@ export function CartDrawer() {
               {items.map((it) => {
                 const p = byId.get(it.productId)
                 const gone = ready && (!p || p.stock <= 0)
+                const price = p ? cartUnitPrice(p, it.quantity) : null
                 return (
                   <li key={it.productId} className="flex flex-col gap-2 rounded-2xl border border-blush-border p-3">
                     <p className="text-base font-semibold">{p?.name ?? (ready ? 'Producto no disponible' : 'Cargando…')}</p>
                     {gone ? (
                       <p className="text-sm text-muted">Este producto ya no está disponible.</p>
                     ) : (
-                      p && <p className="text-base text-muted">{formatPrice(p.retailPrice)} c/u</p>
+                      price && (
+                        <p className="text-base text-muted">
+                          {formatPrice(price.unitPrice)} c/u
+                          {price.wholesale && <span className="font-semibold text-violet"> · precio mayorista</span>}
+                          {!price.wholesale && p?.wholesalePrice != null && p.wholesaleMinQty != null && (
+                            <span className="block text-sm">
+                              Desde {p.wholesaleMinQty} unidades: {formatPrice(p.wholesalePrice)} c/u
+                            </span>
+                          )}
+                        </p>
+                      )
                     )}
                     <div className="flex items-center gap-2">
                       {!gone && (

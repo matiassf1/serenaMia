@@ -1,11 +1,14 @@
 import Image from 'next/image'
-import { formatPrice } from '@/lib/money'
 import { AddToCartButton } from './AddToCartButton'
+import { CardPrice } from './CardPrice'
 
 export type CardProduct = {
   id: number
   name: string
   retailPrice: number
+  /** null si el producto no tiene mayorista o si todavía no se puede ver (modo CODE sin desbloquear). */
+  wholesalePrice?: number | null
+  wholesaleMinQty?: number | null
   stock: number
   lowStockThreshold: number
   imagePath: string | null
@@ -39,7 +42,12 @@ export function ProductCard({ product }: { product: CardProduct }) {
       </div>
       <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="text-base font-semibold leading-snug">{product.name}</h3>
-        <p className="text-lg font-bold text-brand-ink">{formatPrice(product.retailPrice)}</p>
+        <CardPrice
+          productId={product.id}
+          retailPrice={product.retailPrice}
+          wholesalePrice={product.wholesalePrice ?? null}
+          wholesaleMinQty={product.wholesaleMinQty ?? null}
+        />
         <p className={`w-fit rounded-full px-2.5 py-0.5 text-sm font-medium ${state.cls}`}>{state.label}</p>
         <AddToCartButton productId={product.id} name={product.name} disabled={!state.available} />
       </div>

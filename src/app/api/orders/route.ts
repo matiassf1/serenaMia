@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { InvalidOrderError, OutOfStockError, placeOrder } from '@/lib/orders'
 import { loadOrderConfirmation } from '@/lib/orderWhatsApp'
+import { getWholesaleAccessForRequest } from '@/lib/wholesale'
 
 export const LAST_ORDER_COOKIE = 'lastOrderCode'
 
@@ -14,7 +15,8 @@ export async function POST(req: Request) {
 
   try {
     // Solo se copian los campos permitidos: precios, totales y envío del cliente nunca llegan al servicio.
-    // wholesaleUnlocked queda en false hasta la Task 12 (la cookie del código mayorista).
+    // wholesaleUnlocked sale de la cookie firmada con el código vigente, nunca del body.
+    const { unlocked } = await getWholesaleAccessForRequest(req)
     const placed = await placeOrder({
       items: Array.isArray(body.items)
         ? body.items.map((i: Body) => ({ productId: i?.productId as number, quantity: i?.quantity as number }))
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
       shippingZoneId: body.shippingZoneId as number | undefined,
       shippingAddress: body.shippingAddress as string | undefined,
       paymentMethodId: body.paymentMethodId as number,
-      wholesaleUnlocked: false,
+      wholesaleUnlocked: unlocked,
     })
     const confirmation = await loadOrderConfirmation({ id: placed.id })
     const res = NextResponse.json(

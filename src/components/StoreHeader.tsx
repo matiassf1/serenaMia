@@ -102,9 +102,6 @@ export async function StoreHeader() {
           </div>
         </div>
       </div>
-      {settings.wholesaleBanner && (
-        <p className="bg-violet px-4 py-2.5 text-center text-sm font-medium text-white">{settings.wholesaleBanner}</p>
-      )}
     </header>
   )
 }

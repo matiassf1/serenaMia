@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { CART_KEY, addItem, countItems, parseCart, setQuantity, type CartItem } from '@/lib/cart'
+import { unitPriceFor } from '@/lib/pricing'
 
 // Store mínimo sobre localStorage: se lee después de hidratar (el servidor siempre ve el carrito vacío).
 const EMPTY: CartItem[] = []
@@ -46,7 +47,23 @@ function write(items: CartItem[]) {
   listeners.forEach((l) => l())
 }
 
-export type CartProduct = { id: number; name: string; retailPrice: number; stock: number }
+/** wholesalePrice/wholesaleMinQty vienen null si el servidor no deja ver el mayorista (modo CODE sin desbloquear). */
+export type CartProduct = {
+  id: number
+  name: string
+  retailPrice: number
+  stock: number
+  wholesalePrice: number | null
+  wholesaleMinQty: number | null
+}
+
+/** Mismo cálculo que placeOrder (unitPriceFor): lo que ve la clienta es lo que se cobra. */
+export function cartUnitPrice(p: CartProduct, quantity: number): { unitPrice: number; wholesale: boolean } {
+  return unitPriceFor(p, quantity, true, 'PUBLIC')
+}
+
+/** Aviso para volver a pedir los datos del carrito (por ejemplo, tras ingresar el código mayorista). */
+export const PRICES_CHANGED_EVENT = 'sm:prices-changed'
 
 type CartApi = {
   items: CartItem[]
@@ -82,6 +99,13 @@ export function useCart(): CartApi {
 export function useCartProducts(items: CartItem[]) {
   const key = items.map((i) => i.productId).sort((a, b) => a - b).join(',')
   const [state, setState] = useState<{ key: string; byId: Map<number, CartProduct> } | null>(null)
+  const [version, setVersion] = useState(0)
+
+  useEffect(() => {
+    const bump = () => setVersion((v) => v + 1)
+    window.addEventListener(PRICES_CHANGED_EVENT, bump)
+    return () => window.removeEventListener(PRICES_CHANGED_EVENT, bump)
+  }, [])
 
   useEffect(() => {
     if (!key) return
@@ -97,10 +121,13 @@ export function useCartProducts(items: CartItem[]) {
     return () => {
       cancelled = true
     }
-  }, [key])
+  }, [key, version])
 
   const ready = key === '' || state?.key === key
   const byId = state?.byId ?? new Map<number, CartProduct>()
-  const estimatedTotal = items.reduce((sum, i) => sum + (byId.get(i.productId)?.retailPrice ?? 0) * i.quantity, 0)
+  const estimatedTotal = items.reduce((sum, i) => {
+    const p = byId.get(i.productId)
+    return sum + (p ? cartUnitPrice(p, i.quantity).unitPrice * i.quantity : 0)
+  }, 0)
   return { byId, ready, estimatedTotal }
 }
