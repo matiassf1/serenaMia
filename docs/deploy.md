@@ -38,13 +38,19 @@ Ejecutar `git remote -v` antes de empezar.
 
 `PORT` lo inyecta Railway; `next start` lo respeta. Ver `.env.example` para desarrollo local.
 
-## 5. Cron diario de expiración (se cablea en la Task 13)
+## 5. Cron diario de expiración
 
-Documentado ahora; el endpoint aún no existe. Cuando exista (Task 13):
+El endpoint `POST /api/cron/expire` cancela los pedidos con pago pendiente vencidos (48 h por defecto) y repone su stock una sola vez. Es idempotente: una segunda llamada devuelve `{"expired":0}`. Responde `401` si falta el header o el secreto no coincide.
 
-1. Crear un servicio Railway **Cron** (o un schedule en un servicio aparte) con schedule `0 6 * * *` (UTC; ≈ 03:00 en Tucumán).
-2. Que haga `curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/<ruta-del-cron>` (ruta exacta definida en Task 13).
+1. Crear un servicio Railway **Cron** (o un schedule en un servicio aparte) con schedule `0 6 * * *` (UTC; ≈ 03:00 en Tucumán, una vez por día).
+2. Comando del cron:
+   ```
+   curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/expire
+   ```
 3. El servicio cron necesita su propio `CRON_SECRET` con el mismo valor que el web.
+4. Probarlo a mano: sin header debe dar `401`; con el header correcto, `{"expired":N}`.
+
+Además la expiración corre de forma perezosa al listar pedidos en el admin y al consultar el seguimiento, así que el cron diario es una red de seguridad.
 
 ## 6. Verificación
 
