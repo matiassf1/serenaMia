@@ -41,6 +41,7 @@ export async function POST(req: Request) {
         wholesalePrice: text(form, 'wholesalePrice'),
         wholesaleMinQty: qty.trim() === '' ? null : Number(qty),
         stock: intOrNaN(text(form, 'stock')),
+        stockOriginal: text(form, 'stockOriginal') === '' ? undefined : intOrNaN(text(form, 'stockOriginal')),
         lowStockThreshold: text(form, 'lowStockThreshold') === '' ? 3 : intOrNaN(text(form, 'lowStockThreshold')),
         active: text(form, 'active') === 'on',
         imagePath,

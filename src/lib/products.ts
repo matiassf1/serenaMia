@@ -23,6 +23,11 @@ export type ProductInput = {
   wholesalePrice?: string | null
   wholesaleMinQty?: number | null
   stock: number
+  /**
+   * Edición: el stock con el que se abrió el formulario. Se aplica solo la diferencia `stock - stockOriginal`
+   * sobre el stock vivo (así no se pisan ventas ocurridas mientras se editaba). Sin este campo, una edición no toca el stock.
+   */
+  stockOriginal?: number
   lowStockThreshold?: number
   active?: boolean
   /** undefined = no tocar la foto actual. */
@@ -129,15 +134,15 @@ export async function saveProduct(input: ProductInput, adminEmail: string): Prom
   if (!current) fail('El producto no existe.')
   const cur = current as Product
   const slug = cur.name === v.name ? cur.slug : await uniqueSlug(v.name, cur.id)
+  // Primero el stock: si la resta ya no alcanza (se vendió mientras se editaba) falla sin haber guardado nada más.
+  const delta = input.stockOriginal === undefined ? 0 : stock - nonNegInt(input.stockOriginal, 'El stock original', 'stockOriginal')
+  if (delta !== 0) await adjustStock(cur.id, delta, 'Edición del producto', adminEmail)
   const updated = await db.product.update({ where: { id: cur.id }, data: { ...fields, ...imageData, slug } })
 
   const before = prices(cur)
   const after = prices(updated)
   if (JSON.stringify(before) !== JSON.stringify(after)) {
     await logAudit(adminEmail, 'product.price', 'Product', String(cur.id), before, after)
-  }
-  if (stock !== cur.stock) {
-    return adjustStock(cur.id, stock - cur.stock, 'Edición del producto', adminEmail)
   }
   return updated
 }

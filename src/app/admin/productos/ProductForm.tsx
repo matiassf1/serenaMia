@@ -55,6 +55,8 @@ export default function ProductForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4" encType="multipart/form-data">
       {product && <input type="hidden" name="id" value={product.id} />}
+      {/* El stock con el que se abrió el formulario: el servidor aplica solo la diferencia y no pisa ventas hechas mientras tanto. */}
+      {product && <input type="hidden" name="stockOriginal" value={product.stock} />}
       <label className={label}>
         Nombre
         <input name="name" required maxLength={120} defaultValue={product?.name} className={field} />

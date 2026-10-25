@@ -95,7 +95,7 @@ describe('saveProduct', () => {
   it('editar: cambio de precio y de stock escriben AuditLog antes/después y StockLog', async () => {
     const cat = await category()
     const p = await saveProduct(base(cat.id), ADMIN)
-    await saveProduct({ ...base(cat.id), id: p.id, retailPrice: '2.000,00', stock: 2 }, 'otra@serenamia.test')
+    await saveProduct({ ...base(cat.id), id: p.id, retailPrice: '2.000,00', stock: 2, stockOriginal: 5 }, 'otra@serenamia.test')
     const after = await db.product.findUniqueOrThrow({ where: { id: p.id } })
     expect(after.retailPrice).toBe(200000)
     expect(after.stock).toBe(2)
@@ -109,6 +109,47 @@ describe('saveProduct', () => {
     expect(stock.after).toMatchObject({ stock: 2 })
     const logs = await db.stockLog.findMany({ where: { productId: p.id }, orderBy: { id: 'asc' } })
     expect(logs.map((l) => l.delta)).toEqual([5, -3])
+  })
+
+  it('editar con un formulario viejo NO pisa el stock vivo: se aplica solo el cambio que hizo la persona', async () => {
+    const cat = await category()
+    const p = await saveProduct({ ...base(cat.id), stock: 10 }, ADMIN)
+    // El formulario se abre con stock 10; antes de guardar se venden 3 unidades.
+    await db.product.update({ where: { id: p.id }, data: { stock: 7 } })
+    await saveProduct({ ...base(cat.id), id: p.id, name: 'Nombre nuevo', stock: 10, stockOriginal: 10 }, ADMIN)
+    const after = await db.product.findUniqueOrThrow({ where: { id: p.id } })
+    expect(after.name).toBe('Nombre nuevo')
+    expect(after.stock).toBe(7)
+    expect(await db.stockLog.count({ where: { productId: p.id, reason: 'Edición del producto' } })).toBe(0)
+  })
+
+  it('editar el stock en un formulario viejo aplica la diferencia sobre el stock vivo', async () => {
+    const cat = await category()
+    const p = await saveProduct({ ...base(cat.id), stock: 10 }, ADMIN)
+    await db.product.update({ where: { id: p.id }, data: { stock: 7 } }) // se vendieron 3
+    await saveProduct({ ...base(cat.id), id: p.id, stock: 12, stockOriginal: 10 }, ADMIN) // la persona sumó 2
+    expect((await db.product.findUniqueOrThrow({ where: { id: p.id } })).stock).toBe(9)
+    const log = await db.stockLog.findFirstOrThrow({ where: { productId: p.id, reason: 'Edición del producto' } })
+    expect(log.delta).toBe(2)
+  })
+
+  it('una resta que ya no alcanza (se vendió mientras editaba) falla sin tocar nada', async () => {
+    const cat = await category()
+    const p = await saveProduct({ ...base(cat.id), stock: 10 }, ADMIN)
+    await db.product.update({ where: { id: p.id }, data: { stock: 2 } })
+    await expect(
+      saveProduct({ ...base(cat.id), id: p.id, name: 'Otro nombre', stock: 3, stockOriginal: 10 }, ADMIN),
+    ).rejects.toBeInstanceOf(ProductValidationError)
+    const after = await db.product.findUniqueOrThrow({ where: { id: p.id } })
+    expect(after.stock).toBe(2)
+    expect(after.name).not.toBe('Otro nombre')
+  })
+
+  it('sin stockOriginal en una edición, el stock no se toca', async () => {
+    const cat = await category()
+    const p = await saveProduct({ ...base(cat.id), stock: 10 }, ADMIN)
+    await saveProduct({ ...base(cat.id), id: p.id, stock: 99 }, ADMIN)
+    expect((await db.product.findUniqueOrThrow({ where: { id: p.id } })).stock).toBe(10)
   })
 
   it('editar sin tocar precio ni stock no agrega auditoría de precio/stock', async () => {
@@ -319,5 +360,26 @@ describe('rutas admin', () => {
     bad.set('stock', '1')
     const r2 = await createProduct(new Request('http://localhost/api/admin/products', { method: 'POST', headers: { cookie }, body: bad }))
     expect(r2.status).toBe(400)
+  })
+
+  it('editar por formulario con el stock con el que se abrió (stockOriginal): no resucita unidades vendidas', async () => {
+    const cookie = await authedCookie()
+    const cat = await category()
+    const p = await saveProduct({ ...base(cat.id), stock: 10 }, ADMIN)
+    await db.product.update({ where: { id: p.id }, data: { stock: 7 } }) // 3 vendidas después de abrir el formulario
+    const form = new FormData()
+    form.set('id', String(p.id))
+    form.set('name', 'Solo cambio el nombre')
+    form.set('categoryId', String(cat.id))
+    form.set('retailPrice', '1.500,00')
+    form.set('stock', '10')
+    form.set('stockOriginal', '10')
+    form.set('lowStockThreshold', '3')
+    form.set('active', 'on')
+    const res = await createProduct(new Request('http://localhost/api/admin/products', { method: 'POST', headers: { cookie }, body: form }))
+    expect(res.status).toBe(200)
+    const after = await db.product.findUniqueOrThrow({ where: { id: p.id } })
+    expect(after.name).toBe('Solo cambio el nombre')
+    expect(after.stock).toBe(7)
   })
 })
