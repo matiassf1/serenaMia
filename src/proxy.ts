@@ -11,6 +11,9 @@ export function proxy(req: NextRequest) {
   if (pathname.startsWith('/api/')) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
+  // Absoluta a propósito: el adapter del proxy hace new NextURL(Location) sin base, así que una
+  // Location relativa tira ERR_INVALID_URL y devuelve 500 en todo /admin/*. El host interno no se
+  // filtra igual: Next relativiza la Location al salir cuando coincide con el host de la request.
   return NextResponse.redirect(new URL('/admin/login', req.url))
 }
 

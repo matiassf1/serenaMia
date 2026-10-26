@@ -1,3 +1,4 @@
+import { PageContainer } from '@/components/PageContainer'
 import { Suspense } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -20,7 +21,7 @@ async function Confirmation({ params }: Pick<PageProps<'/pedido/[code]'>, 'param
   const { order, deliveryLabel, whatsappUrl } = data
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-5">
+    <PageContainer>
       <div className="rounded-2xl bg-blush p-5 text-center">
         <p className="text-base font-semibold text-violet">¡Listo! Recibimos tu pedido</p>
         <h2 className="mt-1 text-3xl font-bold text-brand-ink">{order.code}</h2>
@@ -70,7 +71,7 @@ async function Confirmation({ params }: Pick<PageProps<'/pedido/[code]'>, 'param
       <Link href="/" className="flex min-h-12 items-center justify-center rounded-full border-2 border-brand-deep px-4 text-base font-semibold text-brand-ink active:bg-blush">
         Seguir mirando productos
       </Link>
-    </div>
+    </PageContainer>
   )
 }
 

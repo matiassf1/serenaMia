@@ -28,18 +28,20 @@ test.afterAll(async () => {
 
 test('los datos del local se ven sin scrollear en celular', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Serena Mia', level: 1 })).toBeInViewport()
-  await expect(page.getByText('Isabel la Católica 641')).toBeInViewport()
-  await expect(page.getByText(/10:30/).first()).toBeInViewport()
-  await expect(page.getByText(/^(Abierto|Cerrado)/).first()).toBeInViewport()
-  await expect(page.getByRole('link', { name: 'Cómo llegar' })).toBeInViewport()
-  await expect(page.getByRole('link', { name: 'WhatsApp', exact: true })).toBeInViewport()
+  // El pie repite dirección y enlaces: lo que importa es lo que se ve arriba, en el contenido principal.
+  const main = page.getByRole('main')
+  await expect(main.getByRole('heading', { name: 'Serena Mia', level: 1 })).toBeInViewport()
+  await expect(main.getByText('Isabel la Católica 641')).toBeInViewport()
+  await expect(main.getByText(/10:30/).first()).toBeInViewport()
+  await expect(main.getByText(/^(Abierto|Cerrado)/).first()).toBeInViewport()
+  await expect(main.getByRole('link', { name: 'Cómo llegar' })).toBeInViewport()
+  await expect(main.getByRole('link', { name: 'WhatsApp', exact: true })).toBeInViewport()
 })
 
 test('botones del encabezado miden al menos 44px', async ({ page }) => {
   await page.goto('/')
   for (const name of ['Cómo llegar', 'WhatsApp']) {
-    const box = await page.getByRole('link', { name, exact: true }).boundingBox()
+    const box = await page.getByRole('main').getByRole('link', { name, exact: true }).boundingBox()
     expect(box!.height).toBeGreaterThanOrEqual(44)
   }
 })

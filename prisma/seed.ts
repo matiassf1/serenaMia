@@ -54,7 +54,9 @@ export async function seed(db: PrismaClient) {
     { n: 5, cat: cosmetologia.id, retail: 1250000, wholesale: null, min: null, stock: 8 },
     { n: 6, cat: cosmetologia.id, retail: 640000, wholesale: 540000, min: 5, stock: 20 },
   ]
-  for (const p of products) {
+  // SEED_SKIP_SAMPLES=1 (producción): solo datos del local, sin productos de ejemplo.
+  const prod = process.env.SEED_SKIP_SAMPLES === '1'
+  for (const p of prod ? [] : products) {
     const slug = `producto-de-ejemplo-${p.n}`
     await db.product.upsert({
       where: { slug },
@@ -80,6 +82,8 @@ export async function seed(db: PrismaClient) {
       name: 'Transferencia',
       instructions: 'Alias: SERENA.MIA.EJEMPLO — Titular: (completar en el panel). Enviá el comprobante por WhatsApp.',
       sortOrder: 1,
+      // En producción queda desactivada hasta que Elías cargue su alias real: nunca mostrar un alias de ejemplo a clientas.
+      active: !prod,
     },
   })
   await db.paymentMethod.upsert({
@@ -93,11 +97,25 @@ export async function seed(db: PrismaClient) {
     update: {},
     create: { name: 'Local Serena Mia', address: ADDRESS },
   })
-  await db.shippingZone.upsert({
-    where: { name: 'San Miguel de Tucumán (zona de ejemplo)' },
-    update: {},
-    create: { name: 'San Miguel de Tucumán (zona de ejemplo)', cost: 300000 },
-  })
+  // Sin zonas activas el checkout no ofrece envío; en producción Elías define sus zonas y costos reales.
+  if (!prod) {
+    await db.shippingZone.upsert({
+      where: { name: 'San Miguel de Tucumán (zona de ejemplo)' },
+      update: {},
+      create: { name: 'San Miguel de Tucumán (zona de ejemplo)', cost: 300000 },
+    })
+  }
+}
+
+// Crea el primer admin desde ADMIN_EMAIL / ADMIN_PASSWORD solo si todavía no existe ninguno (arranque de producción).
+export async function ensureFirstAdmin(db: PrismaClient) {
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase()
+  const password = process.env.ADMIN_PASSWORD
+  if (!email || !password || (await db.adminUser.count()) > 0) return
+  if (password.length < 8) throw new Error('ADMIN_PASSWORD debe tener al menos 8 caracteres')
+  const { hashPassword } = await import('../src/lib/auth')
+  await db.adminUser.create({ data: { email, passwordHash: await hashPassword(password) } })
+  console.log(`Primer admin creado: ${email}`)
 }
 
 // Solo corre al ejecutarse directamente (tsx prisma/seed.ts), no al importarlo desde tests.
@@ -105,6 +123,7 @@ if (process.argv[1]?.endsWith('seed.ts') && !process.env.VITEST) {
   config()
   const db = new PrismaClient()
   seed(db)
+    .then(() => ensureFirstAdmin(db))
     .then(() => console.log('Seed OK'))
     .catch((e) => {
       console.error(e)

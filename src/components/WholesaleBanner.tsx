@@ -9,8 +9,11 @@ export async function WholesaleBanner() {
   if (!a.banner && !locked && !a.visible) return null
 
   return (
-    <section aria-label="Precios mayoristas" className="bg-violet px-4 py-1.5 text-white">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-4 text-center text-sm font-medium">
+    <section
+      aria-label="Precios mayoristas"
+      className="animate-fade-up my-2 overflow-hidden rounded-3xl bg-gradient-to-r from-violet to-brand-ink px-5 py-2 text-white shadow-lg shadow-violet/20"
+    >
+      <div className="flex flex-wrap items-center justify-center gap-x-4 text-center text-sm font-medium md:text-base">
         {a.banner && <p className="py-1.5">{a.banner}</p>}
         {a.mode === 'CODE' && a.unlocked && <p className="py-1.5 font-semibold">Precios mayoristas activados ✓</p>}
         {locked ? (

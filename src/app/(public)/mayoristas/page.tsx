@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { db } from '@/lib/db'
 import { getWholesaleAccess } from '@/lib/wholesale'
+import { PageContainer } from '@/components/PageContainer'
 import { WholesaleCodeForm } from '@/components/WholesaleCodeForm'
 import { WholesaleTable } from '@/components/WholesaleTable'
 
@@ -30,7 +31,7 @@ async function WholesaleList() {
 
 export default function WholesalePage() {
   return (
-    <div className="flex flex-col gap-5">
+    <PageContainer wide>
       <h2 className="font-script text-3xl font-bold text-brand-ink">Lista mayorista</h2>
       <p className="text-base text-muted">
         Elegí la cantidad de cada producto. El precio mayorista se aplica cuando llegás a la cantidad mínima.
@@ -38,6 +39,6 @@ export default function WholesalePage() {
       <Suspense fallback={<p className="py-10 text-center text-muted">Cargando lista…</p>}>
         <WholesaleList />
       </Suspense>
-    </div>
+    </PageContainer>
   )
 }
