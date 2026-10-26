@@ -199,7 +199,9 @@ describe('proxy (protección de rutas)', () => {
   it('sin sesión: /admin/* redirige a /admin/login y /api/admin/* da 401', async () => {
     const page = await proxy(req('/admin/productos'))
     expect(page.status).toBe(307)
-    expect(page.headers.get('location')).toBe('/admin/login')
+    // Absoluta a propósito: una Location relativa acá revienta el adapter del proxy (500 en prod).
+    expect(page.headers.get('location')).toMatch(/^https?:\/\//)
+    expect(new URL(page.headers.get('location')!).pathname).toBe('/admin/login')
     const api = await proxy(req('/api/admin/products'))
     expect(api.status).toBe(401)
   })
